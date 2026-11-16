@@ -28,6 +28,7 @@ export default function CajaPage() {
   const [vista, setVista] = useState("pendientes");
   const [metodo, setMetodo] = useState("Efectivo");
   const [monto, setMonto] = useState("");
+  const [modificarMetodo, setModificarMetodo] = useState(false);
   const [ventaConfirmada, setVentaConfirmada] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -100,6 +101,22 @@ export default function CajaPage() {
   );
 
   const resumen = useMemo(() => calcularResumenCaja(pedidos, fechaResumen), [pedidos, fechaResumen]);
+
+  useEffect(() => {
+    if (!pedidoActivo) return;
+    setModificarMetodo(false);
+    const metodoDefecto = pedidoActivo.metodoSolicitado || "Efectivo";
+    setMetodo(metodoDefecto);
+    const totalPedido = cajaService.calcularTotal(pedidoActivo);
+    setMonto(metodoDefecto === "Efectivo" ? "" : totalPedido.toFixed(2));
+  }, [pedidoActivo?.id, pedidoActivo?.metodoSolicitado]);
+
+  function handleToggleModificarMetodo(checked) {
+    setModificarMetodo(checked);
+    if (!checked && pedidoActivo?.metodoSolicitado) {
+      cambiarMetodo(pedidoActivo.metodoSolicitado);
+    }
+  }
 
   function cambiarVista(nuevaVista) {
     if (bloqueo.current || intento.current) return;
@@ -282,8 +299,6 @@ export default function CajaPage() {
               disabled={entregando || cobrando || reintentoPendiente}
               onSeleccionar={(id) => {
                 setSeleccionadoId(id);
-                setMonto("");
-                setMetodo("Efectivo");
                 setAnticipado(false);
               }}
             />
@@ -313,6 +328,9 @@ export default function CajaPage() {
                   onMontoChange={setMonto}
                   total={total}
                   disabled={entregando || cobrando || reintentoPendiente}
+                  metodoSolicitado={pedidoActivo.metodoSolicitado}
+                  puedeModificarMetodo={modificarMetodo}
+                  onToggleModificarMetodo={handleToggleModificarMetodo}
                 />
 
                 {metodo === "Efectivo" && montoValido && (

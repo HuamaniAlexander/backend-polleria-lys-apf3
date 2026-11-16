@@ -3,7 +3,7 @@ import { getCurrentUser } from './authService';
 import {FLOW_PREVIEW,getFlowStamp,operateFlow,kitchenLabel} from './atencionService';
 
 const METODOS = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', yape: 'Yape', plin: 'Plin' };
-const CAMPOS = 'id, tipo, estado, estado_pago, cuenta_solicitada, destinatario, subtotal, envio, total, creado_en, mesas(numero), detalles_pedido(producto_id, cantidad, precio_unitario, nombre_producto), pagos(id, metodo, monto, recibido, vuelto, referencia, creado_en, comprobante)';
+const CAMPOS = 'id, tipo, estado, estado_pago, cuenta_solicitada, destinatario, subtotal, envio, total, creado_en, metodo_solicitado, mesas(numero), detalles_pedido(producto_id, cantidad, precio_unitario, nombre_producto), pagos(id, metodo, monto, recibido, vuelto, referencia, creado_en, comprobante)';
 const CAMPOS_ATENCION=CAMPOS.replace('detalles_pedido(producto_id','detalles_pedido(id,requiere_preparacion,producto_id')+',version_cuenta,atencion_id,cocina_cancelada_en,entregas_cocina(items),incidencias_atencion(id,tipo,estado,motivo,importe,referencia,creada_en,resuelta_en)';
 function mapAtencion(row){
   const rawPago = Array.isArray(row.pagos) ? row.pagos[0] : (row.pagos || null);
@@ -43,7 +43,15 @@ function normalizarComprobante(recibo) {
 }
 function normalizarPedido(row) {
   const pago = Array.isArray(row.pagos) ? row.pagos[0] : (row.pagos || null);
-  if (pago?.comprobante) return { ...normalizarComprobante(pago.comprobante), estadoPedido: row.estado };
+  const metodoSolicitadoKey = row.metodo_solicitado ? String(row.metodo_solicitado).toLowerCase() : null;
+  const metodoSolicitado = metodoSolicitadoKey ? (METODOS[metodoSolicitadoKey] || row.metodo_solicitado) : null;
+  if (pago?.comprobante) {
+    return {
+      ...normalizarComprobante(pago.comprobante),
+      estadoPedido: row.estado,
+      metodoSolicitado,
+    };
+  }
   const metodoLower = String(pago?.metodo || '').toLowerCase();
   return {
     id: row.id, codigo: row.id, tipo: row.tipo, mesa: row.mesas?.numero || null,
@@ -52,6 +60,7 @@ function normalizarPedido(row) {
     estadoPedido: row.estado, cuentaSolicitada: Boolean(row.cuenta_solicitada),
     subtotal: Number(row.subtotal), envio: Number(row.envio), total: Number(pago?.monto ?? row.total),
     createdAt: row.creado_en, pagadoAt: pago?.creado_en || (row.estado_pago === 'pagado' ? row.creado_en : null),
+    metodoSolicitado,
     items: (row.detalles_pedido || []).map(item => ({ id: item.producto_id, nombre: item.nombre_producto,
       cantidad: Number(item.cantidad), precio: Number(item.precio_unitario) })),
     pago: pago ? {
