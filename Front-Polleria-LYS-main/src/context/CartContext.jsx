@@ -35,7 +35,12 @@ function readStoredDelivery() {
     if (!raw) return { deliveryType: 'delivery', form: EMPTY_FORM }
     const parsed = JSON.parse(raw)
     const normalizedType = parsed.deliveryType === 'pickup' ? 'recojo' : (parsed.deliveryType || 'delivery')
-    return { deliveryType: normalizedType, form: parsed.form || EMPTY_FORM }
+    const rawForm = parsed.form || EMPTY_FORM
+    const sanitizedForm = {
+      ...rawForm,
+      name: typeof rawForm.name === 'string' ? rawForm.name.replace(/[0-9]/g, '') : (rawForm.name || '')
+    }
+    return { deliveryType: normalizedType, form: sanitizedForm }
   } catch {
     return { deliveryType: 'delivery', form: EMPTY_FORM }
   }
@@ -219,7 +224,8 @@ export function CartProvider({ children }) {
   }
 
   function updateFormField(field, value) {
-    setForm((current) => ({ ...current, [field]: value }))
+    const sanitizedValue = field === 'name' && typeof value === 'string' ? value.replace(/[0-9]/g, '') : value
+    setForm((current) => ({ ...current, [field]: sanitizedValue }))
   }
 
   function updateCardField(field, value) {

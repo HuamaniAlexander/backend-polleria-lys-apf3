@@ -7,6 +7,8 @@ export function validateDeliveryForm(form = {}, deliveryType = 'delivery') {
 
   if (!trimmedName) {
     nextErrors.name = 'Ingresa tu nombre completo.'
+  } else if (/\d/.test(trimmedName)) {
+    nextErrors.name = 'El nombre no puede contener números.'
   } else if (trimmedName.length <= 6) {
     nextErrors.name = 'Escribe tu nombre completo (debe tener más de 6 letras).'
   }

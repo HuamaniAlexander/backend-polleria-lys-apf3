@@ -9,6 +9,32 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
     onFormChange('phone', digitsOnly)
   }
 
+  function handleNameChange(event) {
+    const noNumbers = event.target.value.replace(/[0-9]/g, '')
+    onFormChange('name', noNumbers)
+  }
+
+  function handleNameKeyDown(event) {
+    if (event.ctrlKey || event.metaKey || event.altKey) return
+    if (/[0-9]/.test(event.key)) {
+      event.preventDefault()
+    }
+  }
+
+  function handleNamePaste(event) {
+    const paste = (event.clipboardData || window.clipboardData)?.getData('text') || ''
+    if (/[0-9]/.test(paste)) {
+      event.preventDefault()
+      const sanitized = paste.replace(/[0-9]/g, '')
+      const input = event.target
+      const start = input.selectionStart || 0
+      const end = input.selectionEnd || 0
+      const current = form.name || ''
+      const updated = (current.slice(0, start) + sanitized + current.slice(end)).slice(0, 50)
+      onFormChange('name', updated)
+    }
+  }
+
   return (
     <div className="delivery-form-wrapper">
       <h2 className="font-display checkout-form-title">Datos de entrega</h2>
@@ -35,7 +61,9 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
           <input
             className={`lys-input ${errors.name ? 'err' : ''}`}
             value={form.name || ''}
-            onChange={(event) => onFormChange('name', event.target.value)}
+            onChange={handleNameChange}
+            onKeyDown={handleNameKeyDown}
+            onPaste={handleNamePaste}
             placeholder="Ej. María Torres López"
             maxLength={50}
           />
