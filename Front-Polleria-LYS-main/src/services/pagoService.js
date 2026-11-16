@@ -6,7 +6,8 @@ const METODOS = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', yape: 'Yape', plin: 
 const CAMPOS = 'id, tipo, estado, estado_pago, cuenta_solicitada, destinatario, subtotal, envio, total, creado_en, mesas(numero), detalles_pedido(producto_id, cantidad, precio_unitario, nombre_producto), pagos(id, metodo, monto, recibido, vuelto, referencia, creado_en, comprobante)';
 const CAMPOS_ATENCION=CAMPOS.replace('detalles_pedido(producto_id','detalles_pedido(id,requiere_preparacion,producto_id')+',version_cuenta,atencion_id,cocina_cancelada_en,entregas_cocina(items),incidencias_atencion(id,tipo,estado,motivo,importe,referencia,creada_en,resuelta_en)';
 function mapAtencion(row){
-  const cuenta={...row,items:row.detalles_pedido,entregas:row.entregas_cocina,incidencias:row.incidencias_atencion,pago:row.pagos?.[0]};
+  const rawPago = Array.isArray(row.pagos) ? row.pagos[0] : (row.pagos || null);
+  const cuenta={...row,items:row.detalles_pedido,entregas:row.entregas_cocina,incidencias:row.incidencias_atencion,pago:rawPago};
   return {...normalizarPedido(row),cuentaSolicitada:row.cuenta_solicitada,versionCuenta:row.version_cuenta,estadoCocina:kitchenLabel(cuenta),cuenta};
 }
 
@@ -21,29 +22,47 @@ function unwrap({ data, error }) {
   return data;
 }
 function normalizarComprobante(recibo) {
+  const metodoLower = String(recibo.pago?.metodo || '').toLowerCase();
   return {
     ...recibo,
-    subtotal: Number(recibo.subtotal), envio: Number(recibo.envio), total: Number(recibo.total),
+    estado: recibo.estado || 'pagado',
+    pagadoAt: recibo.pagadoAt || recibo.pago?.creado_en || recibo.createdAt || new Date().toISOString(),
+    subtotal: Number(recibo.subtotal),
+    envio: Number(recibo.envio),
+    total: Number(recibo.total),
     items: (recibo.items || []).map(item => ({ ...item, cantidad: Number(item.cantidad), precio: Number(item.precio) })),
-    pago: { ...recibo.pago, metodoId: recibo.pago.metodo,
-      metodo: METODOS[recibo.pago.metodo] || recibo.pago.metodo,
-      monto: Number(recibo.pago.monto), importe: Number(recibo.pago.importe), vuelto: Number(recibo.pago.vuelto) },
+    pago: {
+      ...recibo.pago,
+      metodoId: metodoLower,
+      metodo: METODOS[metodoLower] || recibo.pago?.metodo,
+      monto: Number(recibo.pago?.monto ?? 0),
+      importe: Number(recibo.pago?.importe ?? recibo.pago?.monto ?? 0),
+      vuelto: Number(recibo.pago?.vuelto ?? 0),
+    },
   };
 }
 function normalizarPedido(row) {
-  const pago = row.pagos?.[0];
+  const pago = Array.isArray(row.pagos) ? row.pagos[0] : (row.pagos || null);
   if (pago?.comprobante) return { ...normalizarComprobante(pago.comprobante), estadoPedido: row.estado };
+  const metodoLower = String(pago?.metodo || '').toLowerCase();
   return {
     id: row.id, codigo: row.id, tipo: row.tipo, mesa: row.mesas?.numero || null,
     cliente: row.destinatario?.name || (row.mesas ? `Mesa ${row.mesas.numero}` : 'Cliente'),
     estado: pago || row.estado_pago === 'pagado' ? 'pagado' : row.estado === 'cancelado' ? 'cancelado' : 'pendiente',
     estadoPedido: row.estado, cuentaSolicitada: Boolean(row.cuenta_solicitada),
     subtotal: Number(row.subtotal), envio: Number(row.envio), total: Number(pago?.monto ?? row.total),
-    createdAt: row.creado_en, pagadoAt: pago?.creado_en || null,
+    createdAt: row.creado_en, pagadoAt: pago?.creado_en || (row.estado_pago === 'pagado' ? row.creado_en : null),
     items: (row.detalles_pedido || []).map(item => ({ id: item.producto_id, nombre: item.nombre_producto,
       cantidad: Number(item.cantidad), precio: Number(item.precio_unitario) })),
-    pago: pago ? { id: pago.id, metodoId: pago.metodo, metodo: METODOS[pago.metodo],
-      monto: Number(pago.recibido), importe: Number(pago.monto), vuelto: Number(pago.vuelto), referencia: pago.referencia } : null,
+    pago: pago ? {
+      id: pago.id,
+      metodoId: metodoLower,
+      metodo: METODOS[metodoLower] || pago.metodo,
+      monto: Number(pago.recibido ?? pago.monto),
+      importe: Number(pago.monto),
+      vuelto: Number(pago.vuelto ?? 0),
+      referencia: pago.referencia,
+    } : null,
   };
 }
 async function consultar(estado = null) {
