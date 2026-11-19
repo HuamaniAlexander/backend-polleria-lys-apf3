@@ -3,6 +3,7 @@ import { DELIVERY_COST } from '../data/products'
 import { stockLimit } from '../utils/stock'
 import { getCartProducts } from '../services/productService'
 import { watchCatalog } from '../services/orderUpdates'
+import { cardCheckoutEnabled } from '../services/paymentGatewayService'
 import orderService from '../services/orderService'
 import { getCurrentUser } from '../services/authService'
 import { orderSignature, readPendingOrder, savePendingOrder, clearPendingOrder } from '../utils/pendingOrder'
@@ -297,7 +298,7 @@ export function CartProvider({ children }) {
     const activeUnpaid = await orderService.getActiveUnpaidOrder()
     if (activeUnpaid && !isResumingOrder(activeUnpaid.id)) {
       throw new Error(
-        `Ya tienes un pedido en curso (${formatCodigoPedido(activeUnpaid.id)}) con pago pendiente. Puedes pagar con Tarjeta para continuar.`
+        `Ya tienes un pedido en curso (${formatCodigoPedido(activeUnpaid.id)}) con pago pendiente.${cardCheckoutEnabled ? ' Puedes pagar con tarjeta para continuar.' : ''}`
       )
     }
 

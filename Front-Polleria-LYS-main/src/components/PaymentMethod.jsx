@@ -4,6 +4,7 @@ import { formatCodigoPedido } from '../utils/orderNumber'
 export default function PaymentMethod({
   deliveryType = 'delivery',
   payment,
+  cardCheckoutEnabled,
   onChange,
   onBack,
   onContinue,
@@ -32,9 +33,11 @@ export default function PaymentMethod({
       id: 'tarjeta',
       label: 'Tarjeta',
       badge: null,
-      desc: 'Ingresa los datos de tu tarjeta en Stripe después de revisar tu pedido.',
+      desc: cardCheckoutEnabled
+        ? 'Ingresa los datos de tu tarjeta en Stripe después de revisar tu pedido.'
+        : 'El pago con tarjeta en línea no está disponible por el momento.',
       icon: CreditCard,
-      disabled: false,
+      disabled: !cardCheckoutEnabled,
     },
   ]
 
@@ -48,7 +51,9 @@ export default function PaymentMethod({
           <div>
             <strong>Tienes un pedido pendiente de pago ({formatCodigoPedido(activeUnpaidOrder.id)}):</strong>
             <p>
-              Hasta que no se confirme que se pagó tu pedido anterior en {activeUnpaidOrder.tipo === 'delivery' ? 'entrega' : 'caja'}, solo puedes realizar pedidos nuevos pagando con <strong>Tarjeta</strong>.
+              Hasta que no se confirme que se pagó tu pedido anterior en {activeUnpaidOrder.tipo === 'delivery' ? 'entrega' : 'caja'}, {cardCheckoutEnabled
+                ? 'solo puedes realizar pedidos nuevos pagando con tarjeta.'
+                : 'debes esperar para realizar otro pedido.'}
             </p>
           </div>
         </div>
@@ -75,7 +80,7 @@ export default function PaymentMethod({
                       {method.badge}
                     </span>
                   )}
-                  {isBlocked && <span className="payment-blocked-tag">Pago anterior pendiente</span>}
+                  {isBlocked && method.id !== 'tarjeta' && <span className="payment-blocked-tag">Pago anterior pendiente</span>}
                 </div>
                 <div className="payment-method-info-desc">{method.desc}</div>
               </div>
@@ -110,7 +115,7 @@ export default function PaymentMethod({
 
       <div className="checkout-actions">
         <button className="btn-outline checkout-actions-back" onClick={onBack}>Atrás</button>
-        <button className="btn-ember checkout-actions-primary" disabled={!payment} onClick={onContinue}>
+        <button className="btn-ember checkout-actions-primary" disabled={!methods.some(method => method.id === payment && !method.disabled)} onClick={onContinue}>
           Ver resumen
         </button>
       </div>

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import CheckoutSteps from '../../components/CheckoutSteps'
 import PaymentMethod from '../../components/PaymentMethod'
 import { useCart } from '../../context/CartContext'
+import { cardCheckoutEnabled } from '../../services/paymentGatewayService'
 import orderService from '../../services/orderService'
 import '../../styles/compras.css'
 
@@ -17,7 +18,7 @@ export default function PagoPage() {
     orderService.getActiveUnpaidOrder().then((unpaid) => {
       if (!active || !unpaid) return
       setActiveUnpaidOrder(unpaid)
-      setPayment(current => current === 'tarjeta' ? current : 'tarjeta')
+      if (cardCheckoutEnabled) setPayment('tarjeta')
     }).catch(() => {})
     return () => { active = false }
   }, [setPayment])
@@ -30,7 +31,8 @@ export default function PagoPage() {
       <CheckoutSteps step={2} />
       <PaymentMethod
         deliveryType={deliveryType}
-        payment={payment}
+        payment={!cardCheckoutEnabled && payment === 'tarjeta' ? '' : payment}
+        cardCheckoutEnabled={cardCheckoutEnabled}
         onChange={setPayment}
         onBack={() => navigate('/checkout/entrega')}
         onContinue={() => navigate('/checkout/resumen')}

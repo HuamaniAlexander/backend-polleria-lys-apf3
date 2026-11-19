@@ -1,5 +1,7 @@
 import { requireInsforge } from '../lib/insforge'
 
+export const cardCheckoutEnabled = import.meta.env.VITE_PAGO_TARJETA_HABILITADO === 'true'
+
 async function invoke(body) {
   const { data, error } = await requireInsforge().functions.invoke('pago-tarjeta', { body })
   if (error) throw new Error(error.message || 'El pago con tarjeta no está disponible.')
@@ -7,7 +9,8 @@ async function invoke(body) {
   return data
 }
 
-export function startCardCheckout({ id, items, deliveryType, form }) {
+export async function startCardCheckout({ id, items, deliveryType, form }) {
+  if (!cardCheckoutEnabled) throw new Error('El pago con tarjeta en línea no está disponible.')
   return invoke({
     action: 'start',
     id,

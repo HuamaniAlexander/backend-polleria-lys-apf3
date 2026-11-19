@@ -1,7 +1,7 @@
 import { AlertTriangle } from 'lucide-react'
 import { formatCodigoPedido } from '../utils/orderNumber'
 
-export default function OrderSummary({ items, subtotal, shipping, total, deliveryType, form, payment, money, onBack, onConfirm, saving = false, blocked = false, unpaidOrder = null }) {
+export default function OrderSummary({ items, subtotal, shipping, total, deliveryType, form, payment, cardCheckoutEnabled, money, onBack, onConfirm, saving = false, blocked = false, unpaidOrder = null }) {
   // Desglosar el impuesto incluido en productos y envío sin alterar el cobro.
   const totalCentimos = Math.round(total * 100)
   const baseCentimos = Math.round(totalCentimos / 1.18)
@@ -65,7 +65,7 @@ export default function OrderSummary({ items, subtotal, shipping, total, deliver
           <div>
             <strong>Tienes un pedido pendiente de pago ({formatCodigoPedido(unpaidOrder.id)}):</strong>
             <p>
-              No puedes solicitar otro pedido en {payment === 'efectivo' ? 'efectivo' : 'Yape / Plin'} hasta que se confirme el pago del anterior en {unpaidOrder.tipo === 'delivery' ? 'entrega' : 'caja'}. Regresa al paso anterior y selecciona <strong>Tarjeta</strong> para continuar.
+              No puedes solicitar otro pedido en {payment === 'efectivo' ? 'efectivo' : 'Yape / Plin'} hasta que se confirme el pago del anterior en {unpaidOrder.tipo === 'delivery' ? 'entrega' : 'caja'}. {cardCheckoutEnabled ? ' Regresa al paso anterior y selecciona Tarjeta para continuar.' : ''}
             </p>
           </div>
         </div>

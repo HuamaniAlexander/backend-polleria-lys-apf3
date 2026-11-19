@@ -1,3 +1,4 @@
+import { env } from 'node:process'
 import { Buffer } from 'node:buffer'
 import { test, expect } from './fixtures'
 const identity = { id: '10000000-0000-0000-0000-000000000001', email: 'cliente@example.test', emailVerified: true, profile: { name: 'Cliente Prueba' } }
@@ -85,6 +86,7 @@ for (const failure of ['respuesta', 'lectura']) {
   })
 }
 test('envía a Stripe sin datos de tarjeta y confirma al regresar con el mismo intento', async ({ page }) => {
+  test.skip(env.VITE_PAGO_TARJETA_HABILITADO === 'false', 'Checkout habilitado')
   const { confirmations } = await backend(page)
   const edgeRequests = []
   let intentId
@@ -122,6 +124,24 @@ test('envía a Stripe sin datos de tarjeta y confirma al regresar con el mismo i
   expect(await page.evaluate(() => localStorage.getItem('lys-pending-order'))).toBeNull()
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('lys-cart')))).toEqual({})
 })
+test('bloquea el pago con tarjeta mientras la función no está habilitada', async ({ page }) => {
+  test.skip(env.VITE_PAGO_TARJETA_HABILITADO !== 'false', 'Checkout deshabilitado')
+  const { confirmations } = await backend(page)
+  await page.goto('/checkout/pago')
+  await expect(page.getByRole('button', { name: /tarjeta/i })).toBeDisabled()
+  await page.evaluate(() => localStorage.setItem('lys-checkout-payment', 'tarjeta'))
+  await page.goto('/checkout/resumen')
+  await expect(page.getByRole('alert')).toContainText('pago con tarjeta en línea no está disponible')
+  await expect(page.getByRole('button', { name: 'Pagar con Stripe' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Atrás', exact: true }).click()
+  await page.getByRole('button', { name: /Efectivo/ }).click()
+  await page.getByRole('button', { name: 'Ver resumen' }).click()
+  await page.getByRole('button', { name: 'Confirmar pedido' }).click()
+  await expect(page.getByText('¡Pedido confirmado!')).toBeVisible()
+  expect(confirmations).toHaveLength(1)
+  expect(confirmations[0].metodo).toBe('efectivo')
+})
+
 test('cambiar el contacto tras confirmar sin respuesta no elude el pedido pendiente', async ({ page }) => {
   const { confirmations } = await backend(page, { failFirst: true })
   await page.goto('/checkout/resumen')

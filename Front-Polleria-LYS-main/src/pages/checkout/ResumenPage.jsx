@@ -6,7 +6,7 @@ import OrderSummary from '../../components/OrderSummary'
 import { useCart } from '../../context/CartContext'
 import { money } from '../../utils/currency'
 import orderService from '../../services/orderService'
-import { getCardCheckoutStatus, redirectToCardCheckout, startCardCheckout } from '../../services/paymentGatewayService'
+import { cardCheckoutEnabled, getCardCheckoutStatus, redirectToCardCheckout, startCardCheckout } from '../../services/paymentGatewayService'
 import '../../styles/compras.css'
 
 function StripeReturn({ attemptId }) {
@@ -113,6 +113,7 @@ function OrderReview() {
     }
   }
 
+  const cardUnavailable = payment === 'tarjeta' && !cardCheckoutEnabled
   const pendingCash = payment === 'tarjeta' ? null : unpaidOrder
   return (
     <section className="checkout-page">
@@ -121,6 +122,7 @@ function OrderReview() {
       </button>
       <CheckoutSteps step={3} />
       {error && <p role="alert">{error}</p>}
+      {cardUnavailable && <p role="alert">El pago con tarjeta en línea no está disponible. Vuelve al paso anterior para elegir otro método.</p>}
       {cartLoading && <p role="status">Actualizando los productos del carrito...</p>}
       {(cartError || unavailable) && <p role="alert">{cartError || 'Hay productos no disponibles en el carrito.'}</p>}
       <OrderSummary
@@ -135,7 +137,8 @@ function OrderReview() {
         onBack={() => navigate('/checkout/pago')}
         onConfirm={handleConfirm}
         saving={saving}
-        blocked={!payment || !cartItems.length || cartLoading || Boolean(cartError) || unavailable}
+        cardCheckoutEnabled={cardCheckoutEnabled}
+        blocked={cardUnavailable || !payment || !cartItems.length || cartLoading || Boolean(cartError) || unavailable}
         unpaidOrder={pendingCash}
       />
     </section>

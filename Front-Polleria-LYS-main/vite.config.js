@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 import { getConfigurationError } from './src/lib/insforgeConfig.js'
 
-const publicVariables = ['VITE_INSFORGE_BASE_URL', 'VITE_INSFORGE_ANON_KEY', 'VITE_FLUJO_ATENCIONES']
+const publicVariables = ['VITE_INSFORGE_BASE_URL', 'VITE_INSFORGE_ANON_KEY', 'VITE_FLUJO_ATENCIONES', 'VITE_PAGO_TARJETA_HABILITADO']
 
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, cwd(), 'VITE_')
@@ -14,7 +14,9 @@ export default defineConfig(({ mode, command }) => {
     if (error) throw new Error(error)
   }
 
-  env.VITE_FLUJO_ATENCIONES = env.VITE_FLUJO_ATENCIONES === 'true' ? 'true' : 'false'
+  for (const name of ['VITE_FLUJO_ATENCIONES', 'VITE_PAGO_TARJETA_HABILITADO']) {
+    env[name] = env[name] === 'true' ? 'true' : 'false'
+  }
   return {
     plugins: [react()],
     envPrefix: [],
