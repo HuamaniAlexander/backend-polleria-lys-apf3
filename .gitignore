@@ -14,3 +14,8 @@
 .trae
 .windsurf
 .datos-flujo-local/
+
+# Credenciales locales
+.env
+.env.*
+!.env.example

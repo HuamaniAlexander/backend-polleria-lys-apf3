@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
-import { INSFORGE_PROJECT } from '../Front-Polleria-LYS-main/src/lib/insforgeConfig.js'
+import { INSFORGE_PROJECT, isPublicInsforgeKey } from '../Front-Polleria-LYS-main/src/lib/insforgeConfig.js'
 
 const root = new URL('../', import.meta.url)
 const project = JSON.parse(await readFile(new URL('.insforge/project.json', root), 'utf8'))
@@ -16,7 +16,7 @@ const { stdout } = process.platform === 'win32'
   ? await run('cmd.exe', ['/d', '/s', '/c', 'npx -y @insforge/cli secrets get ANON_KEY --json'], { cwd: fileURLToPath(root) })
   : await run('npx', args, { cwd: fileURLToPath(root) })
 const { value: anonKey } = JSON.parse(stdout)
-if (typeof anonKey !== 'string' || !anonKey || anonKey.startsWith('ik_') || /[\r\n]/.test(anonKey)) {
+if (!isPublicInsforgeKey(anonKey)) {
   throw new Error('InsForge no devolvió una clave anónima pública válida.')
 }
 await writeFile(new URL('Front-Polleria-LYS-main/.env.local', root),
