@@ -224,3 +224,30 @@ for (const width of [320, 390, 768, 876, 1280]) {
     await expect(page.locator('h1.order-detail-id')).toHaveAttribute('title',uuid)
   })
 }
+
+test('conserva la dirección de la última selección aunque la primera consulta termine después', async ({ page }) => {
+  await backend(page)
+  await page.route('https://tile.openstreetmap.org/**', route => route.abort())
+  let releaseFirst
+  const firstResponse = new Promise(resolve => { releaseFirst = resolve })
+  let requests = 0
+  await page.route('https://nominatim.openstreetmap.org/**', async route => {
+    const order = ++requests
+    if (order === 1) await firstResponse
+    await route.fulfill({ json: { address: { road: order === 1 ? 'Calle primera' : 'Calle segunda' } } }).catch(() => {})
+  })
+  try {
+    await page.goto('/checkout/entrega')
+    const map = page.getByRole('region', { name: /Mapa interactivo/ })
+    await expect(map).toBeVisible()
+    const bounds = await map.boundingBox()
+    await map.click({ position: { x: bounds.width / 2 - 35, y: bounds.height / 2 } })
+    await expect.poll(() => requests).toBe(1)
+    await map.click({ position: { x: bounds.width / 2 + 35, y: bounds.height / 2 } })
+    await expect(page.getByRole('combobox')).toHaveValue('Calle segunda, Carabayllo')
+    releaseFirst()
+    await expect(page.getByRole('combobox')).toHaveValue('Calle segunda, Carabayllo')
+  } finally {
+    releaseFirst()
+  }
+})

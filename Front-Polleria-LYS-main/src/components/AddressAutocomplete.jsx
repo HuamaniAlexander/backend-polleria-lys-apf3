@@ -12,44 +12,28 @@ export default function AddressAutocomplete({
 }) {
   const id = useId()
   const [open, setOpen] = useState(false)
-  const [suggestions, setSuggestions] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const containerRef = useRef(null)
 
-  // Búsqueda asistida en tiempo real con debounce
+  const query = open && !disabled && value.trim().length >= 3 ? value.trim() : ''
+  const currentResult = query && result?.query === query ? result : null
+  const suggestions = currentResult?.items || []
+  const loading = Boolean(query && !currentResult)
+
   useEffect(() => {
-    if (!open || !value || value.trim().length < 3) {
-      setSuggestions([])
-      setLoading(false)
-      return
-    }
-
+    if (!query) return
     const controller = new AbortController()
-    let cancelled = false
-    setLoading(true)
-
     const timer = setTimeout(async () => {
-      try {
-        const results = await searchCarabaylloAddresses(value, controller.signal)
-        if (!cancelled) {
-          setSuggestions(results)
-          setLoading(false)
-        }
-      } catch {
-        if (!cancelled) {
-          setSuggestions([])
-          setLoading(false)
-        }
-      }
+      const items = await searchCarabaylloAddresses(query, controller.signal).catch(() => [])
+      if (!controller.signal.aborted) setResult({ query, items })
     }, 450)
 
     return () => {
-      cancelled = true
       clearTimeout(timer)
       controller.abort()
     }
-  }, [value, open])
+  }, [query])
 
   // Cierra el menú al hacer clic fuera del componente
   useEffect(() => {
@@ -64,7 +48,6 @@ export default function AddressAutocomplete({
 
   function handleSelect(item) {
     setOpen(false)
-    setSuggestions([])
     setHighlightedIndex(-1)
 
     const formattedAddress = item.title.toLowerCase().includes('carabayllo')
@@ -78,7 +61,8 @@ export default function AddressAutocomplete({
   }
 
   function handleKeyDown(event) {
-    if (!open || suggestions.length === 0) return
+    if (event.key === 'Escape') setOpen(false)
+    if (suggestions.length === 0) return
 
     if (event.key === 'ArrowDown') {
       event.preventDefault()
@@ -91,8 +75,6 @@ export default function AddressAutocomplete({
         event.preventDefault()
         handleSelect(suggestions[highlightedIndex])
       }
-    } else if (event.key === 'Escape') {
-      setOpen(false)
     }
   }
 
@@ -131,7 +113,7 @@ export default function AddressAutocomplete({
         </div>
       </div>
 
-      {open && (suggestions.length > 0 || (loading && value.trim().length >= 3)) && (
+      {query && (
         <div className="address-autocomplete-dropdown" role="listbox">
           <div className="address-dropdown-header">
             <span>Sugerencias en Carabayllo</span>

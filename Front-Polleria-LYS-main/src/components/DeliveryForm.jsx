@@ -103,6 +103,7 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
             {/* Mapa interactivo delimitado al distrito de Carabayllo */}
             <DeliveryMap
               point={form.location || null}
+              address={form.address || ''}
               onChange={(loc) => onFormChange('location', loc)}
               onAddressDetected={(detectedAddr) => {
                 if (detectedAddr) {

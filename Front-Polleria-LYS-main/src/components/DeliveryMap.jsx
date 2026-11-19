@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MapPin, Locate, AlertTriangle, CheckCircle2, Crosshair, Compass, Info } from 'lucide-react'
@@ -25,24 +25,25 @@ const customDeliveryPin = L.divIcon({
   `,
 })
 
-export default function DeliveryMap({ point, onChange, onAddressDetected }) {
+export default function DeliveryMap({ point, address, onChange, onAddressDetected }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const markerRef = useRef(null)
-  const polygonRef = useRef(null)
+  const activeGeocode = useRef(null)
   const [locating, setLocating] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
-  const [isOutOfZone, setIsOutOfZone] = useState(false)
-  const [isReverseGeocoding, setIsReverseGeocoding] = useState(false)
+  const [geocoding, setGeocoding] = useState(null)
+  const hasPoint = isValidPoint(point)
+  const isOutOfZone = hasPoint && !isWithinCarabayllo(point)
+  const isReverseGeocoding = geocoding?.address === address && !geocoding?.controller.signal.aborted
+  const selectFromMap = useEffectEvent(handleLocationSelect)
 
   // Inicialización del mapa de Leaflet
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
 
-    const initialPoint = isValidPoint(point) ? [point.lat, point.lng] : CARABAYLLO_CENTER
-
     const map = L.map(containerRef.current, {
-      center: initialPoint,
+      center: CARABAYLLO_CENTER,
       zoom: 14,
       minZoom: 12,
       maxZoom: 18,
@@ -76,15 +77,13 @@ export default function DeliveryMap({ point, onChange, onAddressDetected }) {
       className: 'lys-map-tooltip',
     })
 
-    polygonRef.current = zonePolygon
-
     // Evento de clic en el mapa
     map.on('click', (e) => {
       const clicked = {
         lat: Number(e.latlng.lat.toFixed(6)),
         lng: Number(e.latlng.lng.toFixed(6)),
       }
-      handleLocationSelect(clicked, map)
+      selectFromMap(clicked)
     })
 
     // ResizeObserver para mantener el tamaño responsive al redimensionar la ventana
@@ -96,6 +95,7 @@ export default function DeliveryMap({ point, onChange, onAddressDetected }) {
     mapRef.current = map
 
     return () => {
+      activeGeocode.current?.controller.abort()
       resizeObserver.disconnect()
       map.remove()
       mapRef.current = null
@@ -103,27 +103,23 @@ export default function DeliveryMap({ point, onChange, onAddressDetected }) {
     }
   }, [])
 
-  // Sincronización del marcador si cambia `point` desde props (ej. por autocompletado de dirección)
+  useEffect(() => {
+    const pending = activeGeocode.current
+    if (pending && (pending.address !== address || !hasPoint ||
+        pending.point.lat !== point.lat || pending.point.lng !== point.lng)) {
+      pending.controller.abort()
+      activeGeocode.current = null
+    }
+  }, [address, hasPoint, point])
+
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
-    if (!isValidPoint(point)) {
-      if (markerRef.current) {
-        markerRef.current.remove()
-        markerRef.current = null
-      }
-      setIsOutOfZone(false)
+    if (!hasPoint) {
+      markerRef.current?.remove()
+      markerRef.current = null
       return
-    }
-
-    const inZone = isWithinCarabayllo(point)
-    setIsOutOfZone(!inZone)
-
-    if (!inZone) {
-      setStatusMessage('Ubicación fuera del área de reparto en Carabayllo.')
-    } else {
-      setStatusMessage('Punto seleccionado dentro de la zona de Carabayllo.')
     }
 
     if (!markerRef.current) {
@@ -139,7 +135,7 @@ export default function DeliveryMap({ point, onChange, onAddressDetected }) {
           lat: Number(pos.lat.toFixed(6)),
           lng: Number(pos.lng.toFixed(6)),
         }
-        handleLocationSelect(next, map)
+        selectFromMap(next)
       })
 
       markerRef.current = marker
@@ -148,38 +144,29 @@ export default function DeliveryMap({ point, onChange, onAddressDetected }) {
     }
 
     map.setView([point.lat, point.lng], Math.max(map.getZoom(), 15), { animate: true })
-  }, [point])
+  }, [hasPoint, point])
 
-  async function handleLocationSelect(selectedPoint, mapInstance = mapRef.current) {
-    if (!isWithinCarabayllo(selectedPoint)) {
-      setIsOutOfZone(true)
-      setStatusMessage('La ubicación seleccionada está fuera de nuestra zona de cobertura en Carabayllo.')
+  async function handleLocationSelect(selectedPoint) {
+    activeGeocode.current?.controller.abort()
+    activeGeocode.current = null
+    const inZone = isWithinCarabayllo(selectedPoint)
+    onChange(inZone ? selectedPoint : { ...selectedPoint, outOfZone: true })
 
-      if (markerRef.current) {
-        markerRef.current.setLatLng([selectedPoint.lat, selectedPoint.lng])
-      } else if (mapInstance) {
-        markerRef.current = L.marker([selectedPoint.lat, selectedPoint.lng], {
-          icon: customDeliveryPin,
-          draggable: true,
-        }).addTo(mapInstance)
-      }
-      onChange({ ...selectedPoint, outOfZone: true })
+    if (!inZone) {
+      setGeocoding(null)
       return
     }
 
-    setIsOutOfZone(false)
-    setStatusMessage('Punto confirmado dentro de Carabayllo.')
-    onChange(selectedPoint)
-
-    // Geocodificación inversa automática para autocompletar la dirección de la calle
-    setIsReverseGeocoding(true)
-    const detected = await reverseGeocodeCarabayllo(selectedPoint.lat, selectedPoint.lng)
-    setIsReverseGeocoding(false)
-
-    const finalAddress = detected || `Carabayllo (${selectedPoint.lat.toFixed(4)}, ${selectedPoint.lng.toFixed(4)})`
-    if (onAddressDetected) {
-      onAddressDetected(finalAddress)
-    }
+    const controller = new AbortController()
+    const request = { controller, address, point: selectedPoint }
+    activeGeocode.current = request
+    setGeocoding(request)
+    const { lat, lng } = selectedPoint
+    const detected = await reverseGeocodeCarabayllo(lat, lng, controller.signal)
+    if (controller.signal.aborted) return
+    activeGeocode.current = null
+    setGeocoding(null)
+    onAddressDetected?.(detected || `Carabayllo (${lat.toFixed(4)}, ${lng.toFixed(4)})`)
   }
 
   function handleUseMyLocation() {
@@ -204,7 +191,6 @@ export default function DeliveryMap({ point, onChange, onAddressDetected }) {
         }
 
         if (!isWithinCarabayllo(myLocation)) {
-          setIsOutOfZone(true)
           setStatusMessage(
             'Tu ubicación actual está fuera de Carabayllo. Marca tu dirección directamente en el mapa dentro de la zona destacada.'
           )
@@ -235,8 +221,6 @@ export default function DeliveryMap({ point, onChange, onAddressDetected }) {
       setStatusMessage('Mapa enfocado en la zona de reparto de Carabayllo.')
     }
   }
-
-  const hasPoint = isValidPoint(point)
 
   return (
     <div className="delivery-map-wrapper">
@@ -304,8 +288,9 @@ export default function DeliveryMap({ point, onChange, onAddressDetected }) {
           <div className="delivery-status-alert alert-success" role="status">
             <CheckCircle2 size={16} />
             <span>
-              <strong>Punto fijado en Carabayllo</strong> ({point.lat.toFixed(4)}, {point.lng.toFixed(4)})
+              <strong>Punto fijado en Carabayllo</strong> ({Number(point.lat).toFixed(4)}, {Number(point.lng).toFixed(4)})
               {isReverseGeocoding && ' · Identificando calle…'}
+              {statusMessage && ` · ${statusMessage}`}
             </span>
           </div>
         ) : (
