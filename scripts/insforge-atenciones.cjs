@@ -22,10 +22,10 @@ async function inspect(){return (await sql(`SELECT jsonb_build_object('entregas'
  if(action==='docs'){const r=await tool('fetch-docs',{docType:process.argv[3]||'instructions'});console.log(r.content.map(x=>x.text||'').join('\n'));}
  else if(action==='inspect')console.log(JSON.stringify(await inspect()));
  else if(action==='verify-rest'){
-  const line=fs.readFileSync(path.join(root,'README.md'),'utf8').split('\n').find(line=>line.includes('**Administrador**'));
-  const cells=line.split('|').map(s=>s.replaceAll('`','').trim());
-  const login=await fetch(config.transport.env.API_BASE_URL+'/api/auth/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:cells[2],password:cells[3]})});
-  const session=await login.json();if(!login.ok||!session.accessToken)throw new Error('La cuenta de prueba documentada no pudo autenticarse. No se modificaron datos.');
+  const { INSFORGE_TEST_ADMIN_EMAIL: email, INSFORGE_TEST_ADMIN_PASSWORD: password } = process.env;
+  if (!email || !password) throw new Error('Configura la cuenta de prueba en el entorno del operador.');
+  const login=await fetch(config.transport.env.API_BASE_URL+'/api/auth/sessions',{method:'POST',redirect:'error',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+  const session=await login.json();if(!login.ok||!session.accessToken)throw new Error('La cuenta de prueba no pudo autenticarse.');
   const headers={Authorization:'Bearer '+session.accessToken,'Content-Type':'application/json'};
   const response=await fetch(config.transport.env.API_BASE_URL+'/api/database/rpc/flujo_listar',{method:'POST',headers,body:JSON.stringify({p_pagina:0})});const data=await response.json();
   if(!response.ok)throw new Error(data.message||'Error al leer el flujo autenticado');

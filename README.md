@@ -5,17 +5,9 @@ Frontend en **React + Vite** y Backend/Base de Datos en **PostgreSQL administrad
 
 ---
 
-##  Credenciales de Prueba
+## Cuentas de prueba
 
-Utiliza las siguientes cuentas para probar cada uno de los roles y permisos del sistema:
-
-| Rol | Correo Electrónico | Contraseña | Módulos con Acceso |
-| :--- | :--- | :--- | :--- |
-| **Administrador** | `jacobo31_288@stmng.lat` | `q1234567` | Dashboard, Mesas, Cocina, Caja y Perfil |
-| **Caja** | `yaxal97750@ensproxy.com` | `c1234567` | Módulo de Cobros / Caja y Perfil |
-| **Cocinero** | `ratenox394@iconcubic.com` | `prueba123` | Panel de Pedidos en Cocina y Perfil |
-| **Mesero** | `majimer746@goldlicai.com` | `m1234567` | Toma de Pedidos en Mesas y Perfil |
-| **Cliente / Usuario** | `xisep41755@nbasweeps.com` | `u1234567` | Catálogo, Carrito, Checkout, Mis Pedidos y Perfil |
+Usa cuentas provisionadas para cada rol en un entorno de pruebas. Para reproducir el flujo con usuarios ficticios y una base local, consulta [Flujo de atenciones local](docs/flujo-atenciones-local.md).
 
 * **Despliegue en producción:** [https://back-polleria-lys.vercel.app](https://back-polleria-lys.vercel.app)
 
