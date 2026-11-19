@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { DELIVERY_COST } from '../data/products'
 import { stockLimit } from '../utils/stock'
-import { getProduct } from '../services/productService'
+import { getCartProducts } from '../services/productService'
+import { watchCatalog } from '../services/orderUpdates'
 import orderService from '../services/orderService'
 import { getCurrentUser } from '../services/authService'
 import { orderSignature, readPendingOrder, savePendingOrder, clearPendingOrder } from '../utils/pendingOrder'
@@ -84,21 +85,40 @@ export function CartProvider({ children }) {
   const clearStockAlert = () => setStockAlert(null)
 
   useEffect(() => {
-    let active = true
-    const ids = cartIds ? cartIds.split(',') : []
-    const refresh = () => Promise.all(ids.map(getProduct)).then(rows => {
-      if (!active) return
-      setProducts(Object.fromEntries(rows.filter(Boolean).map(product => [product.id, product])))
-      setCatalogState({ ids: cartIds, error: rows.some(product => !product) ? 'Un producto del carrito ya no está en el catálogo.' : '' })
-    }).catch(error => {
-      if (active) setCatalogState({ ids: cartIds, error: error.message })
-    })
-    refresh()
-    const poll = setInterval(()=>{if(document.visibilityState==='visible')void refresh();},60000)
-    window.addEventListener('catalog-stock-changed',refresh)
+    if (!cartIds) return
+    const ids = cartIds.split(',')
+    let active = true, running = false, pending = false, rows = []
+    async function refresh(changes) {
+      if (changes && changes.every(change =>
+        change.recurso === 'categorias' ||
+        (change.recurso === 'productos' && change.productoId && !ids.includes(String(change.productoId))) ||
+        (change.recurso === 'stock' && change.inventarioId && rows.length === ids.length &&
+          rows.every(product => product.inventoryId !== change.inventarioId)),
+      )) return
+      pending = true
+      if (running) return
+      running = true
+      do {
+        pending = false
+        try {
+          rows = await getCartProducts(ids)
+          if (active) {
+            setProducts(Object.fromEntries(rows.map(product => [product.id, product])))
+            setCatalogState({ ids: cartIds, error: rows.length < ids.length ? 'Un producto del carrito ya no está en el catálogo.' : '' })
+          }
+        } catch (error) {
+          if (active) setCatalogState({ ids: cartIds, error: error.message })
+        }
+      } while (active && pending)
+      running = false
+    }
+    const stop = watchCatalog(refresh)
+    const refreshLocal = () => { void refresh() }
+    window.addEventListener('catalog-stock-changed', refreshLocal)
     return () => {
-      active = false; clearInterval(poll)
-      window.removeEventListener('catalog-stock-changed',refresh)
+      active = false
+      stop()
+      window.removeEventListener('catalog-stock-changed', refreshLocal)
     }
   }, [cartIds])
 

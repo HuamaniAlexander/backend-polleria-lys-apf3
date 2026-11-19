@@ -18,7 +18,8 @@ import {
   UtensilsCrossed,
 } from 'lucide-react';
 import { stockLimit } from '../utils/stock';
-import { getCategories, getProducts } from '../services/productService';
+import { useCatalogResource } from '../hooks/useCatalogResource';
+import { getCategories, getProducts, updateCatalogProducts } from '../services/productService';
 import mesaService from '../services/mesaService';
 import * as authService from '../services/authService';
 import {FLOW_PREVIEW} from '../services/atencionService';
@@ -94,51 +95,18 @@ function NuevoPedidoForm({ numeroNormalizado }) {
     return usuario?.nombre ? `${usuario.nombre} ${usuario.apellido || ''}`.trim() : 'Ana Rodríguez';
   });
 
-  const [listaProductos, setListaProductos] = useState([]);
-  const [categorias, setCategorias] = useState(() => CATEGORIAS_FALLBACK);
-  const [cargandoCatalogo, setCargandoCatalogo] = useState(false);
-
-  useEffect(() => {
-    let cancelado = false;
-    async function sincronizarCarta() {
-      try {
-        setCargandoCatalogo(true);
-        const [catsRes, prodsRes] = await Promise.allSettled([
-          getCategories(),
-          getProducts(),
-        ]);
-
-        if (cancelado) return;
-
-        if (catsRes.status === 'fulfilled' && Array.isArray(catsRes.value) && catsRes.value.length > 0) {
-          const catsMapeadas = [
-            ...catsRes.value.map((c) => ({
-              id: c.id,
-              label: c.label || c.nombre || c.id,
-              icono: getCategoryIcon(c.id),
-            })),
-            { id: 'todos', label: 'Toda la carta', icono: Grid2X2 },
-          ];
-          setCategorias(catsMapeadas);
-        }
-
-        if (prodsRes.status === 'fulfilled' && Array.isArray(prodsRes.value) && prodsRes.value.length > 0) {
-          setListaProductos(prodsRes.value);
-        }
-      } catch (err) {
-        console.warn('Usando catálogo local de reserva para salón:', err);
-      } finally {
-        if (!cancelado) setCargandoCatalogo(false);
-      }
-    }
-
-    sincronizarCarta();
-    const interval = setInterval(()=>{if(document.visibilityState==='visible') void getProducts().then(p=>{if(!cancelado)setListaProductos(p);}).catch(()=>{});},60000);
-    return () => {
-      cancelado = true;
-      clearInterval(interval);
-    };
-  }, []);
+  const carta = useCatalogResource(getProducts, 'carta-salon', 0, { update: updateCatalogProducts });
+  const { data: listaCategorias } = useCatalogResource(getCategories, 'categorias-salon', 0, { category: true });
+  const listaProductos = useMemo(() => carta.data || [], [carta.data]);
+  const cargandoCatalogo = carta.loading;
+  const categorias = useMemo(() => listaCategorias?.length ? [
+    ...listaCategorias.map(categoria => ({
+      id: categoria.id,
+      label: categoria.label || categoria.id,
+      icono: getCategoryIcon(categoria.id),
+    })),
+    { id: 'todos', label: 'Toda la carta', icono: Grid2X2 },
+  ] : CATEGORIAS_FALLBACK, [listaCategorias]);
 
   // Filtrar productos
   const productosFiltrados = useMemo(() => {
@@ -302,7 +270,7 @@ function NuevoPedidoForm({ numeroNormalizado }) {
         }
       });
     } catch (err) {
-      void getProducts().then(setListaProductos).catch(()=>{});
+      carta.retry();
       console.error('Error al confirmar la comanda:', err);
       setToastMsg('Ocurrió un error al confirmar la comanda: ' + (err.message || err));
       setTimeout(() => setToastMsg(''), 4000);
