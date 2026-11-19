@@ -2,6 +2,7 @@ import {beforeAll,beforeEach,afterAll,test,expect} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {createLocalDatabase,asLocalUser,localUsers} from '../scripts/local-db.mjs';
+import { prepareCard, confirmCard } from './fixtures/card-checkout.js';
 let db,mesa=0;
 const query=(rol,sql,args=[])=>asLocalUser(db,localUsers.find(u=>u.rol===rol),tx=>tx.query(sql,args));
 const stock=async id=>(await query(null,'SELECT * FROM public.productos_catalogo WHERE id=$1',[id])).rows[0];
@@ -11,8 +12,12 @@ const act=async(rol,action,id,extra={})=>{
  return (await query(rol,'SELECT public.flujo_operar($1,$2) AS data',[action,{operacion:randomUUID(),...(id?{pedido:id,version:p?.version_cuenta}:{}),...extra}])).rows[0].data;
 };
 const open=async(items)=>(await act('mesera','abrir',null,{mesa:++mesa,items})).pedido;
-const client=async(tipo,items,id=randomUUID())=>(await query('cliente','SELECT public.crear_pedido_cliente($1,$2,$3,$4,$5) AS id',
- [id,tipo,items,{name:'Cliente Prueba',phone:'999999999',address:'Av. Prueba 123'},'tarjeta'])).rows[0].id;
+async function client(tipo, articulos, id = randomUUID(), database = db) {
+ const attempt = await prepareCard(database, id, { tipo, articulos,
+  entrega: { name: 'Cliente Prueba', phone: '999999999', address: 'Av. Prueba 123' } });
+ if (await confirmCard(database, attempt) !== 'confirmed') throw new Error('No se pudo confirmar la venta');
+ return id;
+}
 const adjust=async(rol,id,amount,op=randomUUID())=>query(rol,'SELECT public.ajustar_inventario($1,$2,$3,$4)',[id,amount,'Conteo de prueba',op]);
 beforeAll(async()=>{db=await createLocalDatabase(undefined,{inventory:true});},60000);
 beforeEach(async()=>{await db.exec("UPDATE public.inventario_recursos SET unidades=CASE WHEN escala=8 THEN 1600 ELSE 100 END");});
@@ -78,7 +83,7 @@ test('producto nuevo inicia sin existencias inventadas y puede reponerse',async(
 test('la migración reserva comandas previas activas y conserva sus importes',async()=>{
  const previous=await createLocalDatabase();try{
   const u=localUsers.find(u=>u.rol==='cliente');
-  const id=(await asLocalUser(previous,u,tx=>tx.query("SELECT public.crear_pedido_cliente($1,'delivery',$2,$3,'tarjeta') AS id",[randomUUID(),[{id:1,qty:2}],{name:'Cliente Prueba',phone:'999999999',address:'Av. Prueba 123'}]))).rows[0].id;
+  const id = await client('delivery', [{ id: 1, qty: 2 }], randomUUID(), previous);
   const before=(await previous.query('SELECT to_jsonb(p) AS data FROM public.pedidos p WHERE id=$1',[id])).rows[0].data;
   const delivered=(await asLocalUser(previous,u,tx=>tx.query("SELECT public.crear_pedido_cliente($1,'delivery',$2,$3,'efectivo') AS id",[randomUUID(),[{id:1,qty:3}],{name:'Cliente Prueba',phone:'999999999',address:'Av. Prueba 123'}]))).rows[0].id;
   const cook=localUsers.find(u=>u.rol==='cocina');
@@ -93,10 +98,9 @@ test('la migración reserva comandas previas activas y conserva sus importes',as
 },60000);
 
 test('la integración de tarjeta registra el pago y descuenta stock una sola vez',async()=>{
- const id=randomUUID(),op=randomUUID();
- const buy=()=>query('cliente','SELECT public.crear_pedido_cliente_tarjeta($1,$2,$3,$4,$5,$6) AS id',
-  [id,'delivery',[{id:1,qty:2}],{name:'Cliente Tarjeta',phone:'999999999',address:'Av. Prueba 123'},'pi_stock_'+id,op]);
- await buy();await buy();
+ const id = randomUUID();
+ await client('delivery', [{ id: 1, qty: 2 }], id);
+ await client('delivery', [{ id: 1, qty: 2 }], id);
  expect(Number((await stock(1)).stock)).toBe(198);
  const p=(await list()).cuentas.find(p=>p.id===id);
  expect(p.estado_pago).toBe('pagado');

@@ -10,9 +10,9 @@ async function asUser(index,sql,params=[]) {
  await db.exec(index===null?'SET ROLE anon':'SET ROLE authenticated');
  try{return await db.query(sql,params);}finally{await db.exec("RESET ROLE; SELECT set_config('request.jwt.claim.sub','',false)");}
 }
-async function create(type='recojo',items=[{id:1,qty:1}]) {
+async function create(type='recojo',items=[{id:1,qty:1}],owner=1) {
  const id=randomUUID();
- await asUser(1,'SELECT crear_pedido_cliente($1,$2,$3::jsonb,$4::jsonb,$5)',[id,type,JSON.stringify(items),JSON.stringify({name:'Cliente Prueba',phone:'987654321',address:'Av. Prueba 123'}),'efectivo']);
+ await asUser(owner,'SELECT crear_pedido_cliente($1,$2,$3::jsonb,$4::jsonb,$5)',[id,type,JSON.stringify(items),JSON.stringify({name:'Cliente Prueba',phone:'987654321',address:'Av. Prueba 123'}),'efectivo']);
  return id;
 }
 async function salon(items=[{id:1,qty:1}]) {
@@ -24,7 +24,7 @@ async function pay(id) {
  return asUser(5,'SELECT registrar_cobro($1,$2,$3,$4,$5,$6)',[id,'efectivo',row.total,randomUUID(),row.total,null]);
 }
 beforeAll(async()=>{
- await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated;CREATE SCHEMA auth;
+ await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated; CREATE ROLE project_admin;CREATE SCHEMA auth;
  CREATE TABLE auth.users(id uuid PRIMARY KEY,profile jsonb NOT NULL DEFAULT '{}');
  CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  GRANT USAGE ON SCHEMA auth,public TO anon,authenticated;
@@ -148,7 +148,7 @@ const edit=(id,items)=>asUser(3,'SELECT agregar_o_modificar_detalles_salon($1,$2
 test.each(['bebidas','postres'])('solo %s queda listo en salón, recojo y delivery sin preparar ni cobrar',async category=>{
  const product=await directProduct(category);
  for(const type of ['salon','recojo','delivery']) {
-  const id=type==='salon'?await salon([{id:product,qty:1}]):await create(type,[{id:product,qty:1}]);
+  const id=type==='salon'?await salon([{id:product,qty:1}]):await create(type,[{id:product,qty:1}],type==='delivery'?2:1);
   expect(await state(id)).toBe('listo');
   expect((await db.query('SELECT estado_pago FROM pedidos WHERE id=$1',[id])).rows[0].estado_pago).toBe('pendiente');
   expect((await db.query('SELECT requiere_preparacion FROM detalles_pedido WHERE pedido_id=$1',[id])).rows[0].requiere_preparacion).toBe(false);

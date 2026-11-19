@@ -12,11 +12,27 @@ async function applyRealtimeMigrations(db) {
   }
 }
 
+const paymentMigrations = ['20261119033000_pago_tarjeta_verificado.sql', '20261119033100_limitar_pedidos_pendientes.sql'];
+
+async function applyPaymentMigrations(db) {
+  await db.exec(`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'project_admin') THEN
+      CREATE ROLE project_admin;
+    END IF;
+  END $$;`);
+  const [checkout, unpaidLimit] = paymentMigrations;
+  if (!(await db.query("SELECT to_regclass('public.intentos_tarjeta') AS ready")).rows[0].ready) {
+    await db.exec(await readFile(new URL(`../../migrations/${checkout}`, import.meta.url), 'utf8'));
+  }
+  await db.exec(await readFile(new URL(`../../migrations/${unpaidLimit}`, import.meta.url), 'utf8'));
+}
+
 export async function createLocalDatabase(dataDir, { beforePreview, inventory = false } = {}) {
   const db = new PGlite(dataDir);
   if ((await db.query("SELECT to_regclass('public.atenciones_salon') AS ready")).rows[0].ready) {
     if(inventory && !(await db.query("SELECT to_regclass('public.inventario_recursos') AS ready")).rows[0].ready)
       await db.exec(await readFile(new URL('../../migrations/inventario/20261116020000_inventario-compartido.sql',import.meta.url),'utf8'));
+    await applyPaymentMigrations(db);
     await applyRealtimeMigrations(db);
     return db;
   }
@@ -36,7 +52,7 @@ export async function createLocalDatabase(dataDir, { beforePreview, inventory = 
     REVOKE EXECUTE ON FUNCTION realtime.publish(text,text,jsonb) FROM PUBLIC,anon,authenticated;`);
   for(const path of ['../../insforge/migrations/','../../migrations/']) {
     const directory=new URL(path,import.meta.url);
-    for(const name of (await readdir(directory)).filter(name=>name.endsWith('.sql')).sort()) {
+    for(const name of (await readdir(directory)).filter(name=>name.endsWith('.sql') && !paymentMigrations.includes(name)).sort()) {
       await db.exec(await readFile(new URL(name,directory),'utf8'));
     }
   }
@@ -49,6 +65,7 @@ export async function createLocalDatabase(dataDir, { beforePreview, inventory = 
   const preview=new URL('../../migrations/atenciones/',import.meta.url);
   for(const name of (await readdir(preview)).filter(name=>name.endsWith('.sql')).sort()) await db.exec(await readFile(new URL(name,preview),'utf8'));
   if(inventory) await db.exec(await readFile(new URL('../../migrations/inventario/20261116020000_inventario-compartido.sql',import.meta.url),'utf8'));
+  await applyPaymentMigrations(db);
   await applyRealtimeMigrations(db);
   return db;
 }

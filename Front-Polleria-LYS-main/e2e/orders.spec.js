@@ -84,6 +84,44 @@ for (const failure of ['respuesta', 'lectura']) {
     expect(confirmations[0].solicitud_id).toBe(confirmations[1].solicitud_id)
   })
 }
+test('envía a Stripe sin datos de tarjeta y confirma al regresar con el mismo intento', async ({ page }) => {
+  const { confirmations } = await backend(page)
+  const edgeRequests = []
+  let intentId
+  await page.route('**/pago-tarjeta', async route => {
+    const request = route.request()
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: {
+        'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST',
+        'Access-Control-Allow-Headers': 'authorization,content-type',
+      } })
+      return
+    }
+    const body = request.postDataJSON()
+    edgeRequests.push(body)
+    if (body.action === 'start') intentId = body.id
+    const data = body.action === 'start'
+      ? { status: 'open', url: 'https://checkout.stripe.com/c/pay/cs_test_browser' }
+      : { status: 'confirmed', orderId: intentId }
+    await route.fulfill({ json: data, headers: { 'Access-Control-Allow-Origin': '*' } })
+  })
+  await page.route('https://checkout.stripe.com/**', route => route.fulfill({ body: 'Stripe simulado' }))
+
+  await page.goto('/checkout/pago')
+  await page.getByRole('button', { name: /Tarjeta/ }).click()
+  await expect(page.locator('input[autocomplete^="cc-"]')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Ver resumen' }).click()
+  await page.getByRole('button', { name: 'Pagar con Stripe' }).click()
+  await expect(page).toHaveURL(/^https:\/\/checkout\.stripe\.com\/c\/pay\//)
+  expect(edgeRequests).toEqual([{ action: 'start', id: intentId, tipo: 'delivery', articulos: [{ id: 1, qty: 1 }], entrega: form }])
+
+  await page.goto(`/checkout/resumen?pago_tarjeta=${intentId}`)
+  await expect(page.getByText('¡Pedido confirmado!')).toBeVisible()
+  expect(edgeRequests.every(request => request.id === intentId)).toBe(true)
+  expect(confirmations).toHaveLength(0)
+  expect(await page.evaluate(() => localStorage.getItem('lys-pending-order'))).toBeNull()
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('lys-cart')))).toEqual({})
+})
 test('cambiar el contacto tras confirmar sin respuesta no elude el pedido pendiente', async ({ page }) => {
   const { confirmations } = await backend(page, { failFirst: true })
   await page.goto('/checkout/resumen')

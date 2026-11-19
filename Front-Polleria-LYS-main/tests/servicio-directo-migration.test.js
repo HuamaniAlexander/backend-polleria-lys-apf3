@@ -11,7 +11,7 @@ test.each([
 ])('instala y reintenta servicio directo $name conservando cobros y protecciones', async ({ remove, mode }) => {
  const db = new PGlite();
  try {
- await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated;CREATE SCHEMA auth;
+ await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated; CREATE ROLE project_admin;CREATE SCHEMA auth;
  CREATE TABLE auth.users(id uuid PRIMARY KEY,profile jsonb NOT NULL DEFAULT '{}');
  CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  GRANT USAGE ON SCHEMA auth,public TO anon,authenticated;
@@ -28,8 +28,8 @@ test.each([
   const root = new URL(directory, import.meta.url);
   for (const file of (await readdir(root)).filter(f => f.endsWith('.sql') && !f.startsWith('20261115')).sort()) await db.exec(await readFile(new URL(file, root), 'utf8'));
  }
- const client = randomUUID(), cashier = randomUUID(), waiter = randomUUID();
- for (const [id, role] of [[client,'cliente'],[cashier,'caja'],[waiter,'mesera']]) {
+ const client = randomUUID(), otherClient = randomUUID(), cashier = randomUUID(), waiter = randomUUID();
+ for (const [id, role] of [[client,'cliente'],[otherClient,'cliente'],[cashier,'caja'],[waiter,'mesera']]) {
   await db.query('INSERT INTO auth.users(id) VALUES ($1)', [id]);
   await db.query('UPDATE perfiles SET rol=$2 WHERE id=$1', [id,role]);
  }
@@ -43,7 +43,7 @@ test.each([
  const paid = randomUUID(), pending = randomUUID(), paidDelivery = randomUUID();
  await asUser(waiter, "SELECT abrir_pedido_salon($1,1,2,'',$2::jsonb)", [paid,JSON.stringify([{id:drink,qty:1}])]);
  for (const [id,items] of [[pending,[{id:drink,qty:1}]],[paidDelivery,[{id:drink,qty:1},{id:1,qty:1}]]]) {
-  await asUser(client, 'SELECT crear_pedido_cliente($1,$2,$3::jsonb,$4::jsonb,$5)',[id,'delivery',JSON.stringify(items),JSON.stringify({name:'Prueba',phone:'987654321',address:'Av. Prueba 123'}),'efectivo']);
+  await asUser(id === pending ? client : otherClient, 'SELECT crear_pedido_cliente($1,$2,$3::jsonb,$4::jsonb,$5)',[id,'delivery',JSON.stringify(items),JSON.stringify({name:'Prueba',phone:'987654321',address:'Av. Prueba 123'}),'efectivo']);
  }
  for (const id of [paid,paidDelivery]) {
   const total = (await db.query('SELECT total FROM pedidos WHERE id=$1',[id])).rows[0].total;

@@ -20,7 +20,7 @@ test('aplica desde las migraciones de cocina y registra cada checksum atómicame
  await import('../../scripts/apply-migrations.mjs');const writes=queries.filter(query=>query.startsWith('DO $migration$'));
  const files=(await readdir(new URL('../../migrations/',import.meta.url))).filter(file=>file>='20261016220000'&&file.endsWith('.sql')).sort();
  const sustituidas=new Set(['20261115010000_servicio-directo.sql','20261115020000_servicio-directo-seguro.sql']);
- expect(writes).toHaveLength(files.filter(file=>!sustituidas.has(file)).length);expect(writes[0]).toContain('cambiar_estado_cocina');expect(writes[1]).toContain('lys_canales_privados');expect(writes[2]).toContain('obtener_dashboard_admin');expect(writes[3]).toContain('ajustar_estado_servicio');expect(writes[4]).toContain('entregar_pedido_cocina');expect(writes.at(-1)).toContain('crear_pedido_cliente_tarjeta');
+ expect(writes).toHaveLength(files.filter(file=>!sustituidas.has(file)).length);expect(writes[0]).toContain('cambiar_estado_cocina');expect(writes[1]).toContain('lys_canales_privados');expect(writes[2]).toContain('obtener_dashboard_admin');expect(writes[3]).toContain('ajustar_estado_servicio');expect(writes[4]).toContain('entregar_pedido_cocina');expect(writes.at(-2)).toContain('crear_pedido_cliente_tarjeta');expect(writes.at(-1)).toContain('pedido pendiente de pago');
  expect(writes.some(query=>query.includes('CREATE FUNCTION public.registrar_cobro'))).toBe(false);
  expect(writes.every(query=>query.includes('pg_advisory_xact_lock')&&query.includes('INSERT INTO public.schema_migrations'))).toBe(true);
  expect(queries.join('\n')).not.toContain('20261016194047_caja-pagos.sql');
@@ -55,4 +55,10 @@ test('detiene la ejecución si el backend no confirma el registro',async()=>{
  });
  await expect(import('../../scripts/apply-migrations.mjs')).rejects.toThrow(/No se confirmó/);
  expect(queries.filter(query=>query.startsWith('DO $migration$'))).toHaveLength(1);
+});
+
+test('exige HTTPS para enviar credenciales administrativas a un servidor remoto', async () => {
+ vi.stubEnv('INSFORGE_BASE_URL', 'http://example.test');
+ await expect(import('../../scripts/apply-migrations.mjs')).rejects.toThrow(/origen HTTPS/);
+ expect(queries).toEqual([]);
 });

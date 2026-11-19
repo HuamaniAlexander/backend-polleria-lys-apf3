@@ -41,7 +41,7 @@ const historial = (opciones = {}, user = admin) => {
 const hoyLima = async () => (await db.query("SELECT (now() AT TIME ZONE 'America/Lima')::date::text AS hoy")).rows[0].hoy;
 
 beforeAll(async () => {
-  await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE SCHEMA auth;
+  await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE project_admin; CREATE SCHEMA auth;
     CREATE TABLE auth.users(id uuid PRIMARY KEY,profile jsonb NOT NULL DEFAULT '{}');
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     GRANT USAGE ON SCHEMA auth,public TO authenticated,anon;
@@ -175,7 +175,6 @@ test('el rol anónimo no puede ejecutar las funciones del dashboard', async () =
 
 test('delivery cobrado suma a ventas con cada método; el vuelto y el delivery pendiente no inflan ventas',async()=>{
   let ventas=0;
-  await pedidoCliente('delivery',[{id:1,qty:1}]);
   for(const metodo of ['efectivo','tarjeta','yape','plin']) {
     const id=await pedidoCliente('delivery',[{id:1,qty:1}]);
     const total=Number((await db.query('SELECT total FROM pedidos WHERE id=$1',[id])).rows[0].total);
@@ -185,6 +184,7 @@ test('delivery cobrado suma a ventas con cada método; el vuelto y el delivery p
     expect(data.resumen.dia.totalVentas).toBe(ventas);
     expect(data.metodosPago.find(p=>p.metodo===metodo).total).toBe(total);
   }
+  await pedidoCliente('delivery',[{id:1,qty:1}]);
   const data=await dashboard();
   expect(data.resumen.dia.cantidadPedidos).toBe(4);
   expect(data.pedidosPendientes).toBe(1);
