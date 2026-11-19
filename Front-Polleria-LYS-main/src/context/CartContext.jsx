@@ -20,7 +20,11 @@ function readStoredCart() {
   if (typeof window === 'undefined') return {}
   try {
     const raw = window.localStorage.getItem(CART_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : {}
+    const stored = raw ? JSON.parse(raw) : null
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {}
+    return Object.fromEntries(Object.entries(stored).filter(
+      ([id, qty]) => /^[1-9][0-9]*$/.test(id) && Number.isSafeInteger(qty) && qty > 0,
+    ))
   } catch {
     return {}
   }

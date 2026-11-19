@@ -251,3 +251,13 @@ test('conserva la dirección de la última selección aunque la primera consulta
     releaseFirst()
   }
 })
+
+test('abre el checkout aunque el carrito guardado tenga un formato antiguo inválido', async ({ page }) => {
+  await backend(page)
+  await page.goto('/checkout/pago')
+  await expect(page.getByRole('heading', { name: 'Método de pago' })).toBeVisible()
+  await page.evaluate(() => localStorage.setItem('lys-cart', 'null'))
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Método de pago' })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('lys-cart'))).toBe('{}')
+})
