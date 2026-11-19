@@ -1,19 +1,12 @@
 import { CreditCard, Smartphone, Wallet, CheckCircle2, AlertTriangle } from 'lucide-react'
-import CardPaymentForm from './CardPaymentForm'
 import { formatCodigoPedido } from '../utils/orderNumber'
 
 export default function PaymentMethod({
   deliveryType = 'delivery',
   payment,
   onChange,
-  card,
-  cardErrors,
-  processing,
-  gatewayError,
-  onCardChange,
   onBack,
   onContinue,
-  total = 0,
   activeUnpaidOrder = null,
 }) {
   const isDelivery = deliveryType === 'delivery'
@@ -39,7 +32,7 @@ export default function PaymentMethod({
       id: 'tarjeta',
       label: 'Tarjeta',
       badge: null,
-      desc: 'Débito o crédito procesado de forma segura.',
+      desc: 'Ingresa los datos de tu tarjeta en Stripe después de revisar tu pedido.',
       icon: CreditCard,
       disabled: false,
     },
@@ -70,7 +63,7 @@ export default function PaymentMethod({
               onClick={() => {
                 if (!isBlocked) onChange(method.id)
               }}
-              disabled={processing || isBlocked}
+              disabled={isBlocked}
               className={`payment-method-option ${payment === method.id ? 'active' : ''} ${isBlocked ? 'blocked' : ''}`}
             >
               <method.icon size={22} color={payment === method.id ? 'var(--ember)' : 'var(--smoke)'} strokeWidth={1.7} />
@@ -115,34 +108,12 @@ export default function PaymentMethod({
         </div>
       )}
 
-      {payment === 'tarjeta' && (
-        <CardPaymentForm
-          card={card}
-          errors={cardErrors}
-          processing={processing}
-          gatewayError={gatewayError}
-          onChange={onCardChange}
-          total={total}
-          onPay={onContinue}
-        />
-      )}
-
-      {payment !== 'tarjeta' ? (
-        <div className="checkout-actions">
-          <button className="btn-outline checkout-actions-back" onClick={onBack} disabled={processing}>
-            Atrás
-          </button>
-          <button className="btn-ember checkout-actions-primary" disabled={!payment || processing} onClick={onContinue}>
-            {processing ? 'Procesando…' : 'Ver resumen'}
-          </button>
-        </div>
-      ) : (
-        <div className="checkout-actions stripe-actions-centered" style={{ maxWidth: '520px', margin: '14px auto 0 auto', justifyContent: 'center' }}>
-          <button className="btn-outline checkout-actions-back" onClick={onBack} disabled={processing}>
-            Atrás
-          </button>
-        </div>
-      )}
+      <div className="checkout-actions">
+        <button className="btn-outline checkout-actions-back" onClick={onBack}>Atrás</button>
+        <button className="btn-ember checkout-actions-primary" disabled={!payment} onClick={onContinue}>
+          Ver resumen
+        </button>
+      </div>
     </div>
   )
 }

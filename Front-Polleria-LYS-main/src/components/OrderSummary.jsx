@@ -1,7 +1,7 @@
 import { AlertTriangle } from 'lucide-react'
 import { formatCodigoPedido } from '../utils/orderNumber'
 
-export default function OrderSummary({ items, subtotal, shipping, total, deliveryType, form, payment, cardReceipt, money, onBack, onConfirm, saving = false, blocked = false, unpaidOrder = null }) {
+export default function OrderSummary({ items, subtotal, shipping, total, deliveryType, form, payment, money, onBack, onConfirm, saving = false, blocked = false, unpaidOrder = null }) {
   // Desglosar el impuesto incluido en productos y envío sin alterar el cobro.
   const totalCentimos = Math.round(total * 100)
   const baseCentimos = Math.round(totalCentimos / 1.18)
@@ -55,10 +55,7 @@ export default function OrderSummary({ items, subtotal, shipping, total, deliver
           <strong>Pago:</strong>{' '}
           {payment === 'efectivo' && (deliveryType === 'delivery' ? 'Efectivo (Contra entrega)' : 'Efectivo (Pagar en caja)')}
           {payment === 'yape' && (deliveryType === 'delivery' ? 'Yape / Plin (Contra entrega)' : 'Yape / Plin (Pagar en caja)')}
-          {payment === 'tarjeta' &&
-            (cardReceipt
-              ? `${cardReceipt.brandLabel} terminada en ${cardReceipt.last4} · Aprobado (${cardReceipt.authCode})`
-              : 'Tarjeta')}
+          {payment === 'tarjeta' && 'Tarjeta · Stripe Checkout'}
         </div>
       </div>
 
@@ -79,7 +76,7 @@ export default function OrderSummary({ items, subtotal, shipping, total, deliver
           Atrás
         </button>
         <button className="btn-ember checkout-actions-primary" disabled={saving || blocked || Boolean(unpaidOrder)} onClick={onConfirm}>
-          {saving ? 'Guardando...' : 'Confirmar pedido'}
+          {saving ? 'Procesando…' : payment === 'tarjeta' ? 'Pagar con Stripe' : 'Confirmar pedido'}
         </button>
       </div>
     </div>

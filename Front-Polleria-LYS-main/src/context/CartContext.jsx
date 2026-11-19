@@ -15,10 +15,6 @@ const PAYMENT_STORAGE_KEY = 'lys-checkout-payment'
 const ORDER_STORAGE_KEY = 'lys-order-number'
 
 const EMPTY_FORM = { name: '', address: '', reference: '', phone: '' }
-// Los datos de tarjeta NUNCA se guardan en localStorage (ni completos ni parciales):
-// viven solo en memoria mientras dura la sesión de pago.
-const EMPTY_CARD = { number: '', name: '', expiry: '', cvv: '' }
-
 function readStoredCart() {
   if (typeof window === 'undefined') return {}
   try {
@@ -79,8 +75,6 @@ export function CartProvider({ children }) {
   const [form, setForm] = useState(() => readStoredDelivery().form)
   const [payment, setPayment] = useState(readStoredPayment)
   const [orderNumber, setOrderNumber] = useState(readStoredOrderNumber)
-  const [card, setCard] = useState(EMPTY_CARD)
-  const [cardReceipt, setCardReceipt] = useState(null)
   const [stockAlert, setStockAlert] = useState(null)
   const clearStockAlert = () => setStockAlert(null)
 
@@ -246,54 +240,74 @@ export function CartProvider({ children }) {
     setForm((current) => ({ ...current, [field]: sanitizedValue }))
   }
 
-  function updateCardField(field, value) {
-    setCard((current) => ({ ...current, [field]: value }))
-  }
-
-  function clearCard() {
-    setCard(EMPTY_CARD)
-  }
-
   const pendingOrder = useRef(readPendingOrder());
   const confirmation = useRef(null);
   const isResumingOrder = useCallback(id => pendingOrder.current?.id === id &&
     pendingOrder.current.signature === orderSignature(getCurrentUser()?.id, {
       items: cartItems, deliveryType, form, payment,
     }), [cartItems, deliveryType, form, payment]);
-  async function confirmOrder() {
-    if (confirmation.current) return confirmation.current;
+  function currentOrderRequest() {
+    return { items: cartItems, deliveryType, form, payment }
+  }
+
+  function getOrderAttempt(request) {
+    const signature = orderSignature(getCurrentUser()?.id, request)
+    const previous = readPendingOrder() || pendingOrder.current
+    pendingOrder.current = previous?.signature === signature ? previous : { id: crypto.randomUUID(), signature }
+    savePendingOrder(pendingOrder.current)
+    return pendingOrder.current.id
+  }
+
+  const clearMatchingAttempt = useCallback(id => {
+    const current = readPendingOrder() || pendingOrder.current
+    if (current?.id !== id) return false
+    pendingOrder.current = null
+    clearPendingOrder()
+    return true
+  }, [])
+
+  const completeCardCheckout = useCallback((id) => {
+    const items = Object.entries(cart).map(([productId, qty]) => ({ product: { id: Number(productId) }, qty }))
+    const signature = orderSignature(getCurrentUser()?.id, { items, deliveryType, form, payment: 'tarjeta' })
+    const current = readPendingOrder() || pendingOrder.current
+    if (current?.id === id && current.signature === signature) setCart({})
+    clearMatchingAttempt(id)
+    setOrderNumber(id)
+    window.dispatchEvent(new Event('catalog-stock-changed'))
+  }, [cart, deliveryType, form, clearMatchingAttempt])
+
+  function beginCardCheckout() {
+    validateCart()
+    const request = currentOrderRequest()
+    return { ...request, id: getOrderAttempt(request) }
+  }
+
+  function validateCart() {
     if (cartLoading || cartError || !cartItems.length || cartItems.some(item => !item.product.available)) {
       throw new Error('Revisa los productos y su disponibilidad en el carrito antes de continuar.')
     }
-    const user = getCurrentUser();
-    if (!user || user.rol !== 'cliente') throw new Error('Debes iniciar sesión como cliente.');
+    if (getCurrentUser()?.rol !== 'cliente') throw new Error('Debes iniciar sesión como cliente.')
+  }
 
-    // Restricción: solo se permite 1 pedido con pago en efectivo o Yape/Plin (contra entrega o recojo en caja)
-    // hasta que el pago de dicho pedido anterior sea confirmado. Con tarjeta opera con normalidad.
-    if (payment !== 'tarjeta') {
-      const activeUnpaid = await orderService.getActiveUnpaidOrder().catch(() => null);
-      if (activeUnpaid && !isResumingOrder(activeUnpaid.id)) {
-        throw new Error(
-          `Ya tienes un pedido en curso (${formatCodigoPedido(activeUnpaid.id)}) con pago pendiente en ${activeUnpaid.payment === 'efectivo' ? 'efectivo' : 'Yape / Plin'}. Hasta que no se confirme el pago de ese pedido, no puedes realizar otro en efectivo o Yape/Plin. Puedes pagar con Tarjeta para continuar.`
-        );
-      }
+  async function confirmOrder() {
+    if (confirmation.current) return confirmation.current;
+    validateCart()
+    if (payment === 'tarjeta') throw new Error('Completa tu pago en Stripe.')
+
+    const activeUnpaid = await orderService.getActiveUnpaidOrder()
+    if (activeUnpaid && !isResumingOrder(activeUnpaid.id)) {
+      throw new Error(
+        `Ya tienes un pedido en curso (${formatCodigoPedido(activeUnpaid.id)}) con pago pendiente. Puedes pagar con Tarjeta para continuar.`
+      )
     }
 
-    if (payment === 'tarjeta' && (!cardReceipt?.success || cardReceipt.status !== 'succeeded')) {
-      throw new Error('Confirma el pago con tarjeta antes de crear el pedido.');
-    }
-
-    const request = { items: cartItems, deliveryType, form, payment, cardReceipt: payment === 'tarjeta' ? cardReceipt : null };
-    const signature = orderSignature(user.id, request);
-    if (pendingOrder.current?.signature !== signature) {
-      pendingOrder.current = { id: crypto.randomUUID(), signature };
-    }
-    savePendingOrder(pendingOrder.current);
-    confirmation.current = orderService.createOrder({ id: pendingOrder.current.id, ...request })
+    const request = currentOrderRequest()
+    const id = getOrderAttempt(request)
+    confirmation.current = orderService.createOrder({ id, ...request })
       .then(saved => {
         window.dispatchEvent(new Event('catalog-stock-changed'));
-        setOrderNumber(saved.id); setCart({}); clearCard();
-        pendingOrder.current = null; clearPendingOrder();
+        setOrderNumber(saved.id); setCart({});
+        clearMatchingAttempt(id);
         return saved.id;
       }).catch(error => {
         window.dispatchEvent(new Event('catalog-stock-changed'));
@@ -310,8 +324,6 @@ export function CartProvider({ children }) {
     setForm(EMPTY_FORM)
     setPayment('')
     setOrderNumber(null)
-    clearCard()
-    setCardReceipt(null)
   }
 
   const value = {
@@ -340,11 +352,9 @@ export function CartProvider({ children }) {
     updateFormField,
     payment,
     setPayment,
-    card,
-    updateCardField,
-    clearCard,
-    cardReceipt,
-    setCardReceipt,
+    beginCardCheckout,
+    completeCardCheckout,
+    clearMatchingAttempt,
     orderNumber,
     confirmOrder,
     resetAll,
