@@ -72,7 +72,7 @@ export default function CajaPage() {
     const stop = watchOrders(() => { if (!intento.current && !bloqueo.current) void recargar(false); }, { initialRefresh: false, poll: false });
     const timer = setInterval(() => {
       if (!intento.current && document.visibilityState === 'visible') recargar(false);
-    }, 10000);
+    }, 30000);
     const visible = () => { if (document.visibilityState === 'visible' && !intento.current) recargar(false); };
     document.addEventListener('visibilitychange', visible);
     return () => { montado.current = false; stop(); clearTimeout(inicial); clearInterval(timer); document.removeEventListener('visibilitychange', visible); };

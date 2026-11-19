@@ -94,13 +94,11 @@ export function CartProvider({ children }) {
       if (active) setCatalogState({ ids: cartIds, error: error.message })
     })
     refresh()
-    const poll = setInterval(()=>{if(document.visibilityState==='visible')void refresh();},20000)
+    const poll = setInterval(()=>{if(document.visibilityState==='visible')void refresh();},60000)
     window.addEventListener('catalog-stock-changed',refresh)
-    window.addEventListener('focus',refresh)
     return () => {
       active = false; clearInterval(poll)
       window.removeEventListener('catalog-stock-changed',refresh)
-      window.removeEventListener('focus',refresh)
     }
   }, [cartIds])
 

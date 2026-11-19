@@ -133,7 +133,7 @@ function NuevoPedidoForm({ numeroNormalizado }) {
     }
 
     sincronizarCarta();
-    const interval = setInterval(()=>{if(document.visibilityState==='visible') void getProducts().then(p=>{if(!cancelado)setListaProductos(p);}).catch(()=>{});},20000);
+    const interval = setInterval(()=>{if(document.visibilityState==='visible') void getProducts().then(p=>{if(!cancelado)setListaProductos(p);}).catch(()=>{});},60000);
     return () => {
       cancelado = true;
       clearInterval(interval);

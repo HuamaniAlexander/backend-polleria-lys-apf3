@@ -5,7 +5,7 @@ async function backend(page, { failFirst = false, reject = '', role = 'caja', re
   const calls = []; let paid = null, table = 'ocupada';
   calls.reads = [];
   await page.addInitScript(() => localStorage.setItem('lys_pedidos', JSON.stringify([{ id: 'LOCAL-IGNORADO', estado: 'pendiente', total: 1 }])));
-  await page.route('https://b9zz47j5.us-east.insforge.app/**', async route => {
+  await page.route('https://8bwzqx2s.us-east.insforge.app/**', async route => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname;
     let response = {}, status = 200;
     if (path === '/api/auth/refresh') {

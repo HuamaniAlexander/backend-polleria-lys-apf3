@@ -19,10 +19,21 @@ test('consulta pendientes persistidos y excluye cancelados y pedidos vacíos', a
   expect(query.neq).toHaveBeenCalledWith('estado', 'cancelado');
   expect(query.gt).toHaveBeenCalledWith('total', 0);
 });
-test('recorre páginas completas para no omitir pedidos', async () => {
+test('recorre páginas completas de cuentas pendientes para no omitir pedidos', async () => {
   query.then = resolve => resolve({ data: query.range.mock.calls.length === 1 ? Array(100).fill(row) : [row], error: null });
-  expect(await pagos.getPedidos()).toHaveLength(101);
+  expect(await pagos.getPedidosPendientes()).toHaveLength(101);
   expect(query.range).toHaveBeenLastCalledWith(100, 199);
+});
+
+test('Caja descarga solo las pendientes y los últimos cobros, no todo el historial', async () => {
+  let llamadas = 0;
+  // 1.ª consulta = pendientes (1 fila); 2.ª = cobros (página llena de 100 que NO debe seguir paginando).
+  query.then = resolve => resolve({ data: ++llamadas === 1 ? [row] : Array(100).fill(row), error: null });
+  query.range.mockClear();
+  const pedidos = await pagos.getPedidos();
+  expect(query.eq).toHaveBeenCalledWith('estado_pago', 'pagado');
+  expect(pedidos).toHaveLength(101);
+  expect(llamadas).toBe(2);
 });
 
 test('comprueba cambios con una sola fecha y el conteo sin descargar comprobantes', async () => {

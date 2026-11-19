@@ -74,15 +74,16 @@ function normalizarPedido(row) {
     } : null,
   };
 }
-async function consultar(estado = null) {
-  const db = database(), pedidos = [], size = 100;
+// `max` limita las filas descargadas (p. ej. solo los últimos cobros) para no bajar todo el historial.
+async function consultar(estado = null, { max = Infinity } = {}) {
+  const db = database(), pedidos = [], size = Math.min(100, max);
   for (let offset = 0; ; offset += size) {
     let query = db.from('pedidos').select(FLOW_PREVIEW?CAMPOS_ATENCION:CAMPOS).order('creado_en', { ascending: false }).order('id').range(offset, offset + size - 1);
     if (estado) query = query.eq('estado_pago', estado);
     if (estado === 'pendiente') query = query.neq('estado', 'cancelado').gt('total', 0);
     const rows = unwrap(await query) || [];
     pedidos.push(...rows.map(FLOW_PREVIEW?mapAtencion:normalizarPedido));
-    if (rows.length < size) return pedidos;
+    if (rows.length < size || pedidos.length >= max) return pedidos;
   }
 }
 export async function getSelloCambios() {
@@ -92,7 +93,12 @@ export async function getSelloCambios() {
   if (error) throw new Error(error.message || 'No se pudo comprobar si cambiaron las cuentas.');
   return JSON.stringify([count, data?.[0]?.actualizado_en ?? null]);
 }
-export const getPedidos = () => consultar();
+// Caja solo necesita las cuentas por cobrar y los últimos cobros, no todos los pedidos históricos.
+const COBROS_RECIENTES = 100;
+export async function getPedidos() {
+  const [pendientes, cobrados] = await Promise.all([consultar('pendiente'), consultar('pagado', { max: COBROS_RECIENTES })]);
+  return [...pendientes, ...cobrados].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
 export const getPedidosPendientes = () => consultar('pendiente');
 export const getVentas = () => consultar('pagado');
 export async function getPedidoPorId(id) {

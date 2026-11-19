@@ -3,7 +3,7 @@ import mesaService from '../services/mesaService';
 import useOrderResource from './useOrderResource';
 const loadMesas = () => mesaService.fetchMesas({ strict: true });
 export default function useMesas(zona = 'salon_principal') {
-  const { data, loading, error, retry } = useOrderResource(loadMesas, 5000);
+  const { data, loading, error, retry } = useOrderResource(loadMesas, 20000);
   const listaCompleta = useMemo(() => data || [], [data]);
   const [actividades, setActividades] = useState(() => mesaService.getActividades());
 

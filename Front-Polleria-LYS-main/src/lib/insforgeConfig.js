@@ -1,7 +1,7 @@
 export const INSFORGE_PROJECT = {
-  id: '7783e71f-8c16-4fd9-a2e6-24869bf1ec9f',
-  name: 'Backend-Polleria-LYS',
-  baseUrl: 'https://b9zz47j5.us-east.insforge.app',
+  id: 'f3fe5475-d922-49e4-8d30-c0c61c118cfe',
+  name: 'FIX-DB-LYS-NOV',
+  baseUrl: 'https://8bwzqx2s.us-east.insforge.app',
 }
 
 export function getConfigurationError(baseUrl, anonKey, { localPreview = false } = {}) {

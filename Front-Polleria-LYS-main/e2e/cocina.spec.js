@@ -17,7 +17,7 @@ function fixture() {
     if(value==='2')ws.send('3');
    });
   });
-  await page.route('https://b9zz47j5.us-east.insforge.app/**',async route=>{
+  await page.route('https://8bwzqx2s.us-east.insforge.app/**',async route=>{
    const request=route.request(),url=new URL(request.url());let response={},status=200;
    if(url.pathname==='/api/auth/refresh')response={user:{id:ids[role],email:`${role}@example.test`,emailVerified:true},accessToken:`${btoa('{"alg":"HS256"}')}.${btoa(JSON.stringify({sub:ids[role],exp:Math.floor(Date.now()/1000)+3600}))}.test`};
    else if(url.pathname.endsWith('/perfiles'))response={id:ids[role],rol:role,nombre:role};

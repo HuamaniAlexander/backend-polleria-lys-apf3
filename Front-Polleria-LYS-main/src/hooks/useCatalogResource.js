@@ -17,13 +17,11 @@ export function useCatalogResource(load, key, delay = 0) {
         if (active) setState({ key: requestKey, data, error: '' })
       }).catch(() => { /* La próxima consulta o reintento vuelve a comprobar el catálogo. */ })
     }
-    const interval = setInterval(refresh, 20000)
+    const interval = setInterval(refresh, 60000)
     window.addEventListener('catalog-stock-changed', refresh)
-    window.addEventListener('focus', refresh)
     return () => {
       active = false; clearTimeout(timer); clearInterval(interval)
       window.removeEventListener('catalog-stock-changed', refresh)
-      window.removeEventListener('focus', refresh)
     }
   }, [load, requestKey, delay])
   const current = state.key === requestKey

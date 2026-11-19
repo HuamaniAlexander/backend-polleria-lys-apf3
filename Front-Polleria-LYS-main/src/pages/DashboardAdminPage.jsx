@@ -49,7 +49,7 @@ export default function DashboardAdminPage() {
       }
     }
     cargar();
-    const timer = setInterval(cargar, 10000);
+    const timer = setInterval(cargar, 30000);
     document.addEventListener('visibilitychange', cargar);
     return () => { activo = false; clearInterval(timer); document.removeEventListener('visibilitychange', cargar); };
   }, [filtros, revision]);

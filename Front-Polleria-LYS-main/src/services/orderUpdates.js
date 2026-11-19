@@ -32,7 +32,7 @@ export function watchOrders(refresh, { intervalMs = 10000, initialRefresh = true
       try {
         const stamp = await getOrderChangeStamp();
         if (entry.listeners.size && stamp !== entry.stamp) { entry.stamp = stamp; broadcast(); }
-      } catch { if (entry.listeners.size) broadcast(); }
+      } catch { /* Se reintenta en el siguiente ciclo; no se fuerza una recarga completa. */ }
       finally { entry.busy = false; }
     };
     entry.visible = () => { if (document.visibilityState !== 'hidden') { broadcast(); void entry.check(); } };
