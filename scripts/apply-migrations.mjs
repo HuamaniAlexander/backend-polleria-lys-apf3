@@ -1,17 +1,16 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
+import { getInsforgeAdminConfig } from './insforge-admin-config.mjs';
 const { values } = parseArgs({ options: { application: { type: 'boolean', default: false }, realtime: { type: 'boolean', default: false }, from: { type: 'string' } } });
 if (values.application && values.realtime) throw new Error('Selecciona --application o --realtime.');
 if (values.from && !/^[A-Za-z0-9_.-]+$/.test(values.from)) throw new Error('Prefijo de migración inválido.');
-const baseUrl = process.env.INSFORGE_BASE_URL?.replace(/\/$/, '');
-const apiKey = process.env.INSFORGE_API_KEY;
-if (!baseUrl || !apiKey) throw new Error('Define INSFORGE_BASE_URL e INSFORGE_API_KEY. Nunca uses la API key en el frontend.');
+const { baseUrl, headers } = getInsforgeAdminConfig();
 async function sql(query) {
   const response = await fetch(`${baseUrl}/api/database/advance/rawsql`, {
-    method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ query }),
+    method: 'POST', headers, redirect: 'error', body: JSON.stringify({ query }),
   });
-  if (!response.ok) throw new Error(`Error SQL HTTP ${response.status}: ${await response.text()}`);
+  if (!response.ok) throw new Error(`Error SQL HTTP ${response.status}`);
   return response.json();
 }
 await sql("CREATE TABLE IF NOT EXISTS public.schema_migrations(version text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now()); ALTER TABLE public.schema_migrations ENABLE ROW LEVEL SECURITY; REVOKE ALL ON public.schema_migrations FROM PUBLIC,anon,authenticated;");
