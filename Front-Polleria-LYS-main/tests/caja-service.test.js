@@ -7,7 +7,7 @@ const row = { id: 'uuid', tipo: 'salon', estado: 'preparacion', estado_pago: 'pe
 const recibo = { id: 'uuid', codigo: 'uuid', total: '42.90', subtotal: '42.90', envio: '0', estado: 'pagado', items: [{ id: 1, nombre: 'Nombre vendido', precio: '42.9', cantidad: 1 }], pago: { id: 'pago', metodo: 'efectivo', monto: '50', importe: '42.9', vuelto: '7.1' } };
 beforeEach(() => {
   vi.clearAllMocks(); user.mockReturnValue({ rol: 'caja' });
-  for (const method of ['select','eq','neq','gt','order','range','limit']) query[method] = vi.fn(() => query);
+  for (const method of ['select','eq','neq','gt','order','range','in']) query[method] = vi.fn(() => query);
   query.then = resolve => resolve({ data: [row], error: null });
   query.maybeSingle = vi.fn().mockResolvedValue({ data: row, error: null });
   rpc.mockResolvedValue({ data: recibo, error: null });
@@ -36,11 +36,12 @@ test('Caja descarga solo las pendientes y los últimos cobros, no todo el histor
   expect(llamadas).toBe(2);
 });
 
-test('comprueba cambios con una sola fecha y el conteo sin descargar comprobantes', async () => {
-  query.then = resolve => resolve({ data: [{ actualizado_en: '2026-10-16T19:30:00Z' }], count: 12, error: null });
-  expect(await pagos.getSelloCambios()).toBe(JSON.stringify([12, '2026-10-16T19:30:00Z']));
-  expect(query.select).toHaveBeenCalledWith('actualizado_en', { count: 'exact' });
-  expect(query.limit).toHaveBeenCalledWith(1);
+test('refresca solo los pedidos avisados, sin repetir los pagos ni las pendientes', async () => {
+  const otros = { id: 'otro', estado: 'pendiente', createdAt: '2026-10-01' };
+  const pedidos = await pagos.actualizarPedidos([otros], [{ pedidoId: 'uuid' }, { pedidoId: 'uuid' }]);
+  expect(query.in).toHaveBeenCalledExactlyOnceWith('id', ['uuid']);
+  expect(query.range).not.toHaveBeenCalled();
+  expect(pedidos.map(pedido => pedido.id)).toEqual(['uuid', 'otro']);
 });
 test('envía una sola RPC sin confiar en total o vuelto propuestos por el navegador', async () => {
   const result = await pagos.registrarCobro('uuid', { metodo: 'Efectivo', monto: 50, idempotencia: 'clave', totalEsperado: 42.9, vuelto: 999 });

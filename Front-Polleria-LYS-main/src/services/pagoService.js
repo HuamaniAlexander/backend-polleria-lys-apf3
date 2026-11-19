@@ -1,10 +1,11 @@
 import { insforge, configurationError } from '../lib/insforge';
 import { getCurrentUser } from './authService';
-import {FLOW_PREVIEW,getFlowStamp,operateFlow,kitchenLabel} from './atencionService';
+import {FLOW_PREVIEW,operateFlow,kitchenLabel} from './atencionService';
 
 const METODOS = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', yape: 'Yape', plin: 'Plin' };
 const CAMPOS = 'id, tipo, estado, estado_pago, cuenta_solicitada, destinatario, subtotal, envio, total, creado_en, metodo_solicitado, mesas(numero), detalles_pedido(producto_id, cantidad, precio_unitario, nombre_producto), pagos(id, metodo, monto, recibido, vuelto, referencia, creado_en, comprobante)';
 const CAMPOS_ATENCION=CAMPOS.replace('detalles_pedido(producto_id','detalles_pedido(id,requiere_preparacion,producto_id')+',version_cuenta,atencion_id,cocina_cancelada_en,entregas_cocina(items),incidencias_atencion(id,tipo,estado,motivo,importe,referencia,creada_en,resuelta_en)';
+const columnasCaja = () => (FLOW_PREVIEW ? CAMPOS_ATENCION : CAMPOS).replace(', comprobante)', ')');
 function mapAtencion(row){
   const rawPago = Array.isArray(row.pagos) ? row.pagos[0] : (row.pagos || null);
   const cuenta={...row,items:row.detalles_pedido,entregas:row.entregas_cocina,incidencias:row.incidencias_atencion,pago:rawPago};
@@ -78,7 +79,7 @@ function normalizarPedido(row) {
 async function consultar(estado = null, { max = Infinity } = {}) {
   const db = database(), pedidos = [], size = Math.min(100, max);
   for (let offset = 0; ; offset += size) {
-    let query = db.from('pedidos').select(FLOW_PREVIEW?CAMPOS_ATENCION:CAMPOS).order('creado_en', { ascending: false }).order('id').range(offset, offset + size - 1);
+    let query = db.from('pedidos').select(columnasCaja()).order('creado_en', { ascending: false }).order('id').range(offset, offset + size - 1);
     if (estado) query = query.eq('estado_pago', estado);
     if (estado === 'pendiente') query = query.neq('estado', 'cancelado').gt('total', 0);
     const rows = unwrap(await query) || [];
@@ -86,18 +87,32 @@ async function consultar(estado = null, { max = Infinity } = {}) {
     if (rows.length < size || pedidos.length >= max) return pedidos;
   }
 }
-export async function getSelloCambios() {
-  if(FLOW_PREVIEW){database();return JSON.stringify(await getFlowStamp());}
-  const { data, count, error } = await database().from('pedidos')
-    .select('actualizado_en', { count: 'exact' }).order('actualizado_en', { ascending: false }).limit(1);
-  if (error) throw new Error(error.message || 'No se pudo comprobar si cambiaron las cuentas.');
-  return JSON.stringify([count, data?.[0]?.actualizado_en ?? null]);
-}
 // Caja solo necesita las cuentas por cobrar y los últimos cobros, no todos los pedidos históricos.
 const COBROS_RECIENTES = 100;
+const ordenarPedidos = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || a.id.localeCompare(b.id);
 export async function getPedidos() {
   const [pendientes, cobrados] = await Promise.all([consultar('pendiente'), consultar('pagado', { max: COBROS_RECIENTES })]);
-  return [...pendientes, ...cobrados].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  return [...pendientes, ...cobrados].sort(ordenarPedidos);
+}
+export async function actualizarPedidos(actuales, cambios) {
+  const ids = [...new Set(cambios.map(cambio => cambio.pedidoId))];
+  if (ids.some(id => !id)) return getPedidos();
+  const db = database();
+  const rows = unwrap(await db.from('pedidos').select(columnasCaja()).in('id', ids)) || [];
+  const pendientes = rows.filter(row => row.estado_pago === 'pendiente' && row.estado !== 'cancelado' && Number(row.total) > 0);
+  const pagados = rows.filter(row => row.estado_pago === 'pagado');
+  const map = FLOW_PREVIEW ? mapAtencion : normalizarPedido;
+  const actualizados = [...actuales.filter(pedido => !ids.includes(pedido.id)), ...pendientes.map(map), ...pagados.map(map)];
+  const anterioresPagados = actuales.filter(pedido => pedido.estado === 'pagado');
+  const requiereCompletar = anterioresPagados.length === COBROS_RECIENTES &&
+    anterioresPagados.some(pedido => ids.includes(pedido.id) && !pagados.some(row => row.id === pedido.id));
+  const cobrados = requiereCompletar
+    ? await consultar('pagado', { max: COBROS_RECIENTES })
+    : actualizados.filter(pedido => pedido.estado === 'pagado').sort(ordenarPedidos).slice(0, COBROS_RECIENTES);
+  return [...actualizados.filter(pedido => pedido.estado !== 'pagado'), ...cobrados].sort(ordenarPedidos);
+}
+export async function getResumenDia(dia) {
+  return unwrap(await database().rpc('obtener_resumen_caja', { p_dia: dia }));
 }
 export const getPedidosPendientes = () => consultar('pendiente');
 export const getVentas = () => consultar('pagado');
@@ -120,4 +135,4 @@ export async function confirmarEntregaDelivery(id,version) {
   if(FLOW_PREVIEW){database();return operateFlow('confirmar_delivery',{pedido:id,version});}
   return unwrap(await database().rpc('confirmar_entrega_delivery', { p_pedido_id: id }));
 }
-export default { confirmarEntregaDelivery, getSelloCambios, getPedidos, getPedidosPendientes, getPedidoPorId, getVentas, calcularTotal, registrarCobro };
+export default { confirmarEntregaDelivery, getPedidos, actualizarPedidos, getResumenDia, getPedidosPendientes, getPedidoPorId, getVentas, calcularTotal, registrarCobro };

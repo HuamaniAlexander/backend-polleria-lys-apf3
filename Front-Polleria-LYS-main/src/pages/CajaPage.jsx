@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Banknote, CheckCircle2, Clock3, ShoppingBag } from "lucide-react";
 import { calcularResumenCaja, fechaLima } from '../utils/cajaSummary';
-import { watchOrders } from '../services/orderUpdates';
+import { ORDER_EVENT, PAYMENT_EVENT } from '../services/orderUpdates';
+import useOrderResource from '../hooks/useOrderResource';
+import useFechaLima from '../hooks/useFechaLima';
 import cajaService from "../services/pagoService";
 import ListaPedidos from "../components/caja/ListaPedidos";
 import BuscadorPedidos from "../components/caja/BuscadorPedidos";
@@ -13,6 +15,10 @@ import fondo from "../img/fondo.png";
 import {FLOW_PREVIEW,operateFlow,openIncident} from '../services/atencionService';
 import {IncidentActions} from '../components/flow/FlowShared';
 import '../styles/attentionIntegration.css';
+const eventosCaja = [ORDER_EVENT, PAYMENT_EVENT];
+const eventosResumen = [PAYMENT_EVENT];
+const sinPedidos = [];
+
 function inView(p,view){
   if(view==='cobrados')return p.estado==='pagado';
   if(p.estado!=='pendiente'||p.total<=0)return false;
@@ -21,62 +27,36 @@ function inView(p,view){
 }
 
 export default function CajaPage() {
-  const [pedidos, setPedidos] = useState([]);
-  const [fechaResumen, setFechaResumen] = useState(() => fechaLima());
+  const { data, loading, error: errorConsulta, retry: recargar } =
+    useOrderResource(cajaService.getPedidos, { events: eventosCaja, update: cajaService.actualizarPedidos });
+  const pedidos = data || sinPedidos;
+  const actualizarPedido = id => recargar([{ pedidoId: id }]);
+  const fechaResumen = useFechaLima();
+  const cargarResumen = useCallback(() => cajaService.getResumenDia(fechaResumen), [fechaResumen]);
+  const { data: resumenServidor, error: errorResumen, retry: recargarResumen } =
+    useOrderResource(cargarResumen, { events: eventosResumen });
   const [seleccionadoId, setSeleccionadoId] = useState(null);
   const [busqueda, setBusqueda] = useState("");
   const [vista, setVista] = useState("pendientes");
-  const [metodo, setMetodo] = useState("Efectivo");
-  const [monto, setMonto] = useState("");
-  const [modificarMetodo, setModificarMetodo] = useState(false);
+  const [borradorPago, setBorradorPago] = useState(null);
   const [ventaConfirmada, setVentaConfirmada] = useState(null);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState("");
+  const [abriendoComprobante, setAbriendoComprobante] = useState(false);
+  const [revisando, setRevisando] = useState(false);
+  const cargando = loading || revisando;
+  const [errorOperacion, setError] = useState("");
+  const error = errorOperacion || errorConsulta || errorResumen;
   const [cobrando, setCobrando] = useState(false);
   const [entregando, setEntregando] = useState(false);
   const [reintentoPendiente, setReintentoPendiente] = useState(false);
+  const [pedidoEnCobro, setPedidoEnCobro] = useState(null);
   const [filtroTipo,setFiltroTipo]=useState('todos'),[filtroCocina,setFiltroCocina]=useState('todos'),[fechaCobro,setFechaCobro]=useState(''),[soloReparto,setSoloReparto]=useState(false),[anticipado,setAnticipado]=useState(false);
   const intento = useRef(null);
   const bloqueo = useRef(false);
   const montado = useRef(false);
-  const consulta = useRef(0);
-  const consultando = useRef(false);
-  const sello = useRef(null);
-
-  const recargar = useCallback(async (forzar = true) => {
-    if (bloqueo.current || (!forzar && consultando.current)) return;
-    setFechaResumen(fechaLima());
-    consultando.current = true;
-    const version = ++consulta.current;
-    try {
-      const cambios = await cajaService.getSelloCambios();
-      if (!montado.current || version !== consulta.current || bloqueo.current) return;
-      if (!forzar && cambios === sello.current) { setError(""); return; }
-      const data = await cajaService.getPedidos();
-      if (!montado.current || version !== consulta.current || bloqueo.current) return;
-      sello.current = cambios;
-      setPedidos(data);
-      setSeleccionadoId(actual => data.some(p => p.id === actual&&inView(p,vista)) ? actual : data.find(p=>inView(p,vista))?.id ?? null);
-      setError("");
-    } catch (err) {
-      if (montado.current && version === consulta.current) setError(err.message || "No se pudieron consultar los pedidos.");
-    } finally {
-      if (version === consulta.current) consultando.current = false;
-      if (montado.current && version === consulta.current) setCargando(false);
-    }
-  }, [vista]);
-
   useEffect(() => {
     montado.current = true;
-    const inicial = setTimeout(recargar, 0);
-    const stop = watchOrders(() => { if (!intento.current && !bloqueo.current) void recargar(false); }, { initialRefresh: false, poll: false });
-    const timer = setInterval(() => {
-      if (!intento.current && document.visibilityState === 'visible') recargar(false);
-    }, 30000);
-    const visible = () => { if (document.visibilityState === 'visible' && !intento.current) recargar(false); };
-    document.addEventListener('visibilitychange', visible);
-    return () => { montado.current = false; stop(); clearTimeout(inicial); clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
-  }, [recargar]);
+    return () => { montado.current = false; };
+  }, []);
 
   const pendientes = pedidos.filter(p=>inView(p,'pendientes'));
   const abiertas=FLOW_PREVIEW?pedidos.filter(p=>inView(p,'abiertas')):[];
@@ -89,8 +69,14 @@ export default function CajaPage() {
       .includes(busqueda.trim().toLowerCase())&&(!FLOW_PREVIEW||((filtroTipo==='todos'||pedido.tipo===filtroTipo)&&(filtroCocina==='todos'||pedido.estadoCocina===filtroCocina)&&(!fechaCobro||vista!=='cobrados'||fechaLima(pedido.pagadoAt)===fechaCobro)&&(!soloReparto||pedido.tipo==='delivery'&&pedido.estadoPedido==='en_camino')))
   );
 
-  const pedidoActivo = pedidos.find((pedido) => pedido.id === seleccionadoId) ?? null;
+  const pedidoActivo = pedidoEnCobro ?? listaActiva.find(pedido => pedido.id === seleccionadoId) ?? listaActiva[0] ?? null;
   const total = pedidoActivo ? cajaService.calcularTotal(pedidoActivo) : 0;
+  const metodoSugerido = pedidoActivo?.metodoSolicitado || "Efectivo";
+  const borrador = borradorPago?.pedidoId === pedidoActivo?.id && borradorPago?.metodoSugerido === metodoSugerido
+    ? borradorPago : null;
+  const metodo = borrador?.metodo ?? metodoSugerido;
+  const monto = borrador?.monto ?? (metodo === "Efectivo" ? "" : total.toFixed(2));
+  const modificarMetodo = borrador?.modificarMetodo ?? false;
   const montoNumerico = Number(monto);
   const montoValido = monto !== "" && /^\d+(\.\d{1,2})?$/.test(monto) && Number.isFinite(montoNumerico) && montoNumerico > 0;
   const puedeCobrar = Boolean(
@@ -100,22 +86,22 @@ export default function CajaPage() {
       (metodo !== "Efectivo" || (montoValido && montoNumerico >= total))
   );
 
-  const resumen = useMemo(() => calcularResumenCaja(pedidos, fechaResumen), [pedidos, fechaResumen]);
+  const resumen = useMemo(() => ({
+    ...calcularResumenCaja(pedidos, fechaResumen),
+    ...resumenServidor,
+  }), [pedidos, fechaResumen, resumenServidor]);
 
-  useEffect(() => {
-    if (!pedidoActivo) return;
-    setModificarMetodo(false);
-    const metodoDefecto = pedidoActivo.metodoSolicitado || "Efectivo";
-    setMetodo(metodoDefecto);
-    const totalPedido = cajaService.calcularTotal(pedidoActivo);
-    setMonto(metodoDefecto === "Efectivo" ? "" : totalPedido.toFixed(2));
-  }, [pedidoActivo?.id, pedidoActivo?.metodoSolicitado]);
+  function editarPago(cambios) {
+    setBorradorPago({ pedidoId: pedidoActivo?.id, metodoSugerido, metodo, monto, modificarMetodo, ...cambios });
+  }
 
   function handleToggleModificarMetodo(checked) {
-    setModificarMetodo(checked);
-    if (!checked && pedidoActivo?.metodoSolicitado) {
-      cambiarMetodo(pedidoActivo.metodoSolicitado);
-    }
+    if (bloqueo.current || intento.current) return;
+    editarPago(checked ? { modificarMetodo: true } : {
+      modificarMetodo: false,
+      metodo: metodoSugerido,
+      monto: metodoSugerido === "Efectivo" ? "" : total.toFixed(2),
+    });
   }
 
   function cambiarVista(nuevaVista) {
@@ -124,23 +110,22 @@ export default function CajaPage() {
     setVista(nuevaVista);
     setBusqueda("");
     setSeleccionadoId(nuevaLista[0]?.id ?? null);
-    setMonto("");
+    setBorradorPago(null);
     setAnticipado(false);setSoloReparto(false);setFechaCobro('');
   }
 
   function cambiarMetodo(nuevoMetodo) {
     if (bloqueo.current || intento.current) return;
-    setMetodo(nuevoMetodo);
-    setMonto(nuevoMetodo === "Efectivo" ? "" : total.toFixed(2));
+    editarPago({ metodo: nuevoMetodo, monto: nuevoMetodo === "Efectivo" ? "" : total.toFixed(2) });
   }
 
   async function confirmarVenta() {
     if (!puedeCobrar || bloqueo.current) return;
     bloqueo.current = true;
-    ++consulta.current;
     setCobrando(true);
     setError("");
-    intento.current ??= { id: seleccionadoId, data: {
+    setPedidoEnCobro(pedidoActivo);
+    intento.current ??= { id: pedidoActivo.id, data: {
       metodo, monto: metodo === "Efectivo" ? montoNumerico : total,
       idempotencia: crypto.randomUUID(), totalEsperado: total,
       version:pedidoActivo?.versionCuenta,anticipado,
@@ -148,10 +133,11 @@ export default function CajaPage() {
     try {
       const pedidoPagado = await cajaService.registrarCobro(intento.current.id, intento.current.data);
       if (!montado.current) return;
-      setPedidos(actual => actual.map(p => p.id === pedidoPagado.id ? pedidoPagado : p));
       setVentaConfirmada(pedidoPagado);
       intento.current = null;
       setReintentoPendiente(false);
+      await Promise.all([actualizarPedido(pedidoPagado.id), recargarResumen()]);
+      if (montado.current) setPedidoEnCobro(null);
     } catch (err) {
       if (montado.current) {
         setError(err.message || "No se pudo confirmar el cobro. Reintenta para consultar su resultado.");
@@ -166,7 +152,6 @@ export default function CajaPage() {
   async function confirmarEntregaDelivery() {
     if (bloqueo.current || intento.current || !pedidoActivo) return;
     bloqueo.current = true;
-    ++consulta.current;
     setEntregando(true);
     setError('');
     try {
@@ -178,7 +163,7 @@ export default function CajaPage() {
       bloqueo.current = false;
       if (montado.current) setEntregando(false);
     }
-    await recargar();
+    await actualizarPedido(pedidoActivo.id);
   }
 
   function cerrarTicket() {
@@ -186,25 +171,37 @@ export default function CajaPage() {
     setVentaConfirmada(null);
     setVista("pendientes");
     setSeleccionadoId(primerPendiente?.id ?? null);
-    setMonto("");
-    setMetodo("Efectivo");
-    recargar();
   }
 
   async function revisarCuenta() {
     if (bloqueo.current) return;
     intento.current = null;
     setReintentoPendiente(false);
-    setMonto("");
-    setCargando(true);
-    await recargar();
+    setPedidoEnCobro(null);
+    setBorradorPago(null);
+    setError("");
+    setRevisando(true);
+    try { await Promise.all([recargar(), recargarResumen()]); } finally { if (montado.current) setRevisando(false); }
   }
+  async function abrirComprobante() {
+    setError("");
+    setAbriendoComprobante(true);
+    try {
+      const pedido = await cajaService.getPedidoPorId(pedidoActivo.id);
+      if (montado.current && pedido?.pago) setVentaConfirmada(pedido);
+    } catch (err) {
+      if (montado.current) setError(err.message || "No se pudo consultar el comprobante.");
+    } finally {
+      if (montado.current) setAbriendoComprobante(false);
+    }
+  }
+
   async function gestionarIncidencia(action,cuenta,extra={}){
     if(bloqueo.current||intento.current)return;bloqueo.current=true;setEntregando(true);setError('');
     let fallo='';
     try{return await operateFlow(action,{pedido:cuenta.id,version:cuenta.version_cuenta,...extra});}
     catch(err){fallo=err.message||'No se pudo registrar la incidencia.';throw err;}
-    finally{await recargar();if(fallo)setError(fallo);bloqueo.current=false;setEntregando(false);}
+    finally{await actualizarPedido(cuenta.id);bloqueo.current=false;if(montado.current){if(fallo)setError(fallo);setEntregando(false);}}
   }
 
   return (
@@ -295,10 +292,11 @@ export default function CajaPage() {
 
             <ListaPedidos
               pedidos={pedidosFiltrados}
-              pedidoSeleccionado={seleccionadoId}
+              pedidoSeleccionado={pedidoActivo?.id}
               disabled={entregando || cobrando || reintentoPendiente}
               onSeleccionar={(id) => {
                 setSeleccionadoId(id);
+                setBorradorPago(null);
                 setAnticipado(false);
               }}
             />
@@ -325,7 +323,7 @@ export default function CajaPage() {
                   metodo={metodo}
                   onMetodoChange={cambiarMetodo}
                   monto={monto}
-                  onMontoChange={setMonto}
+                  onMontoChange={monto => editarPago({ monto })}
                   total={total}
                   disabled={entregando || cobrando || reintentoPendiente}
                   metodoSolicitado={pedidoActivo.metodoSolicitado}
@@ -354,7 +352,7 @@ export default function CajaPage() {
               </>
             )}
             {pedidoActivo?.estado === "pagado" && pedidoActivo.pago && (
-              <button type="button" className="btn-ember" onClick={() => setVentaConfirmada(pedidoActivo)}>Ver comprobante</button>
+              <button type="button" className="btn-ember" onClick={abrirComprobante} disabled={abriendoComprobante}>Ver comprobante</button>
             )}
           </section>
         </div>
