@@ -1,6 +1,6 @@
 import { IconoCelular, IconoDocumento, IconoEfectivo, IconoTarjeta } from "../common/Iconos";
 import { formatCodigoPedido } from "../../utils/orderNumber";
-import { obtenerColorMetodo } from "./VentasMetodoPago";
+import { obtenerColorMetodo } from "../../utils/paymentMethodColor";
 
 const formatoSoles = new Intl.NumberFormat("es-PE", {
   style: "currency",

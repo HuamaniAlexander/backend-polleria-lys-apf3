@@ -92,13 +92,20 @@ function crearTendenciaOption(metrica) {
       },
       formatter: (items) => {
         const item = items[0];
-        return `
-          <div class="echart-tooltip">
-            <div class="echart-tooltip-axis">${item.axisValue}</div>
-            <div class="echart-tooltip-title">${metrica.etiqueta}</div>
-            <div class="echart-tooltip-value ${metrica.claseIcono}">Valor: ${item.value}</div>
-          </div>
-        `;
+        if (!item) return ''
+        const tooltip = document.createElement('div')
+        tooltip.className = 'echart-tooltip'
+        for (const [className, text] of [
+          ['echart-tooltip-axis', item.axisValue],
+          ['echart-tooltip-title', metrica.etiqueta],
+          [`echart-tooltip-value ${metrica.claseIcono}`, `Valor: ${item.value}`],
+        ]) {
+          const line = document.createElement('div')
+          line.className = className
+          line.textContent = text
+          tooltip.append(line)
+        }
+        return tooltip
       },
       axisPointer: { type: "line", lineStyle: { color: metrica.colorBarra, opacity: 0.35 } },
     },
