@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { takeCheckoutReturn } from '../utils/loginReturn';
 import { completeOAuth } from '../services/authService';
 
 export default function AuthCallbackPage() {
@@ -10,7 +11,7 @@ export default function AuthCallbackPage() {
     let active = true;
     completeOAuth()
       .then(() => {
-        if (active) navigate('/', { replace: true });
+        if (active) navigate(takeCheckoutReturn(), { replace: true });
       })
       .catch((err) => {
         if (active) setError(err.message);

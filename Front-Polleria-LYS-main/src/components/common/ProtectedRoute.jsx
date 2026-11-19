@@ -5,7 +5,7 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   const location = useLocation();
   if (loading) return <p role="status">Verificando sesión...</p>;
   if (error) return <p role="alert">{error}</p>;
-  if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  if (!user) return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />;
   if (allowedRoles && !allowedRoles.includes(user.rol)) return <Navigate to="/profile" replace />;
   return children;
 }

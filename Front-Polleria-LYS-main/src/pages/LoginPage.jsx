@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import * as authService from '../services/authService';
 import { validateLoginForm } from '../services/validators';
+import { checkoutReturnPath, rememberCheckoutReturn } from '../utils/loginReturn';
 import Logo from '../components/common/Logo';
 import '../styles/login.css';
 
 function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const returnPath = checkoutReturnPath(location.state?.from);
 
   const [form, setForm] = useState({
     email: '',
@@ -50,7 +52,7 @@ function LoginPage() {
 
     try {
       await authService.login(form);
-      navigate('/', { replace: true });
+      navigate(returnPath, { replace: true });
     } catch (err) {
       if (err.code === 'EMAIL_NOT_VERIFIED') {
         navigate('/verify-email', { state: { email: form.email.trim().toLowerCase() }, replace: true });
@@ -67,6 +69,7 @@ function LoginPage() {
   async function handleGoogle() {
     if (loading) return;
     setLoading(true); setFormError('');
+    rememberCheckoutReturn(returnPath);
     try { await authService.signInWithGoogle(); }
     catch (err) { setFormError(err.message); setLoading(false); }
   }

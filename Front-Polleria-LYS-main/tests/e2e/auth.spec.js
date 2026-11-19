@@ -130,3 +130,30 @@ test('guarda perfil y preferencias con respuesta del servidor', async ({ page })
   await page.getByRole('button', { name: 'Ofertas y promociones' }).click();
   await expect(page.getByRole('button', { name: 'Ofertas y promociones' })).toHaveAttribute('aria-pressed','false');
 });
+
+for (const method of ['contraseña', 'Google']) {
+  test(`recupera el pago pendiente tras iniciar sesión con ${method}`, async ({ page }) => {
+    await backend(page);
+    const id = '20000000-0000-0000-0000-000000000099';
+    await page.route('**/pago-tarjeta', async route => {
+      const headers = {
+        'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST',
+        'Access-Control-Allow-Headers': 'authorization,content-type',
+      };
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      return route.fulfill({ json: { status: 'processing' }, headers });
+    });
+    const statusRequest = page.waitForRequest(request => request.url().endsWith('/pago-tarjeta') && request.method() === 'POST');
+    await page.goto(`/checkout/resumen?pago_tarjeta=${id}`);
+    await expect(page).toHaveURL(/\/login$/);
+    if (method === 'Google') {
+      await page.getByRole('button', { name: /Google/ }).click();
+    } else {
+      await page.getByLabel('Correo electrónico', { exact: true }).fill(user.email);
+      await page.getByLabel('Contraseña', { exact: true }).fill('Correct123');
+      await page.getByRole('button', { name: 'Iniciar sesión', exact: true }).click();
+    }
+    await expect(page.getByText('Stripe aún no confirma el pago.', { exact: false })).toBeVisible();
+    expect((await statusRequest).postDataJSON()).toEqual({ action: 'status', id });
+  });
+}

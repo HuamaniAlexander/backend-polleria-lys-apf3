@@ -36,3 +36,12 @@ test.each([
   expect(auth.getAuthSnapshot()).toEqual({ user: null, loading: false, error: error.message });
   expect(fake.from).not.toHaveBeenCalled();
 });
+
+test('restaura la sesión aunque el navegador bloquee el almacenamiento local', async () => {
+  localStorage.removeItem.mockImplementation(() => { throw new Error('Almacenamiento bloqueado'); });
+  fake.getCurrentUser.mockResolvedValue({ data: null, error: { statusCode: 401 } });
+  const auth = await import('../src/services/authService');
+  await auth.initializeAuth();
+  expect(fake.getCurrentUser).toHaveBeenCalledOnce();
+  expect(auth.getAuthSnapshot()).toEqual({ user: null, loading: false, error: '' });
+});

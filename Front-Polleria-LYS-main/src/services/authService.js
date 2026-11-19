@@ -59,7 +59,9 @@ async function syncSession() {
 export function initializeAuth() {
   if (!initialization) {
     // Remove the former mock database, plaintext passwords and forged sessions.
-    ['lys_users','lys_session','lys_reset_requests'].forEach(key => localStorage.removeItem(key));
+    try {
+      ['lys_users', 'lys_session', 'lys_reset_requests'].forEach(key => localStorage.removeItem(key));
+    } catch { /* El SDK puede restaurar la sesión sin acceso a localStorage. */ }
     initialization = syncSession().catch(error => {
       publish({ user: null, loading: false, error: error.message });
     });
