@@ -23,7 +23,6 @@ export default function MascotCarousel({ interval = 3200 }) {
   const center = activeIndex
   const left = (activeIndex + 3) % SLIDES.length
   const right = (activeIndex + 1) % SLIDES.length
-  const back = (activeIndex + 2) % SLIDES.length
 
   const roleFor = (index) =>
     index === center ? 'center' : index === left ? 'left' : index === right ? 'right' : 'back'

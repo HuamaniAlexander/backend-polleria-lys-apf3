@@ -7,8 +7,6 @@ import { useCart } from '../../context/CartContext'
 import { validateDeliveryForm } from '../../utils/deliveryValidation'
 import '../../styles/compras.css'
 
-export { validateDeliveryForm }
-
 export default function EntregaPage() {
   const navigate = useNavigate()
   const { deliveryType, setDeliveryType, form, updateFormField } = useCart()

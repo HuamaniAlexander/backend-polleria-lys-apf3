@@ -1,4 +1,4 @@
-import { CreditCard, MapPin, Phone, User } from 'lucide-react'
+import { CreditCard, MapPin, User } from 'lucide-react'
 
 const PAYMENT_LABELS = {
   efectivo: 'Efectivo',
