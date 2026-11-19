@@ -40,6 +40,10 @@ La aplicación abrirá en: **`http://localhost:5173`**
 
 ---
 
+## Pagos con tarjeta
+
+Consulta [Pagos con Stripe e InsForge](docs/pagos-stripe-insforge.md) para configurar la función y validar el flujo con Stripe en modo de prueba.
+
 ##  Pruebas y Construcción
 
 Dentro de la carpeta `Front-Polleria-LYS-main`, puedes ejecutar:
