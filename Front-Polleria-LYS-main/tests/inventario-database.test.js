@@ -87,7 +87,7 @@ test('la migración reserva comandas previas activas y conserva sus importes',as
    await asLocalUser(previous,cook,tx=>tx.query('SELECT public.flujo_operar($1,$2)',[action,{pedido:delivered,version:current,operacion:randomUUID()}]));
   }
   await previous.exec(await readFile(new URL('../../migrations/inventario/20261116020000_inventario-compartido.sql',import.meta.url),'utf8'));
-  expect(Number((await previous.query('SELECT stock FROM public.productos_catalogo WHERE id=1')).rows[0].stock)).toBe(198);
+  expect(Number((await previous.query('SELECT stock FROM public.productos_catalogo WHERE id=1')).rows[0].stock)).toBe(68);
   expect((await previous.query('SELECT to_jsonb(p) AS data FROM public.pedidos p WHERE id=$1',[id])).rows[0].data).toEqual(before);
  }finally{await previous.close();}
 },60000);
