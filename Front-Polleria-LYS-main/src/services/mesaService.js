@@ -1,7 +1,7 @@
 import { SEED_MESAS, SEED_ACTIVIDADES, ESTADOS_MESA } from '../data/mesasData';
 import { requireInsforge } from '../lib/insforge';
 import { getCurrentUser } from './authService';
-import { FLOW_PREVIEW, getFlow, operateFlow, pendingKitchen, openIncident } from './atencionService';
+import { FLOW_PREVIEW, getFlowMesas, operateFlow, pendingKitchen, openIncident } from './atencionService';
 
 const MESAS_KEY = 'lys_mesas';
 const ACTIVIDADES_KEY = 'lys_actividades';
@@ -86,7 +86,7 @@ function mapMesaFromDb(row) {
 export async function fetchMesas({ strict = false } = {}) {
   try {
     if(FLOW_PREVIEW){
-      const data=await getFlow();
+      const data=await getFlowMesas();
       cacheMesas=data.mesas.map(m=>{
         const atencion=data.atenciones.find(a=>a.mesa_id===m.id);
         const cuentas=atencion?data.cuentas.filter(p=>p.atencion_id===atencion.id):[];
@@ -259,7 +259,7 @@ export async function enviarPedidoCocina(pedidoId) {
  * Registra la solicitud de cuenta para caja en PostgreSQL (SCRUM-281).
  */
 export async function solicitarCuenta(pedidoId, mesaNumero) {
-  if(FLOW_PREVIEW){const p=(await getFlow()).cuentas.find(p=>p.id===pedidoId);if(!p)throw new Error('La cuenta ya no está disponible');await operateFlow('solicitar',{pedido:pedidoId,version:p.version_cuenta});await fetchMesas({strict:true});return true;}
+  if(FLOW_PREVIEW){const p=(await getFlowMesas()).cuentas.find(p=>p.id===pedidoId);if(!p)throw new Error('La cuenta ya no está disponible');await operateFlow('solicitar',{pedido:pedidoId,version:p.version_cuenta});await fetchMesas({strict:true});return true;}
   const { db } = getDbClient();
   const res = await db.rpc('solicitar_cuenta_salon', {
     p_pedido_id: pedidoId,
@@ -383,7 +383,7 @@ export function getEstadisticasMesas(zona = 'salon_principal') {
 
 export async function fetchActividades() {
   try {
-    if(FLOW_PREVIEW)return ((await getFlow()).actividades||[]).map(a=>({id:a.id,mesaNumero:a.mesa_numero,tipo:a.tipo,tipoColor:a.tipo_color,titulo:a.titulo,descripcion:a.descripcion,ordenCodigo:a.orden_codigo,createdAt:a.creado_en}));
+    if(FLOW_PREVIEW)return ((await getFlowMesas()).actividades||[]).map(a=>({id:a.id,mesaNumero:a.mesa_numero,tipo:a.tipo,tipoColor:a.tipo_color,titulo:a.titulo,descripcion:a.descripcion,ordenCodigo:a.orden_codigo,createdAt:a.creado_en}));
     const { db } = getDbClient();
     const res = await db.rpc('obtener_actividad_salon');
     const data = unwrap(res, 'No se pudo obtener la actividad desde PostgreSQL.');
