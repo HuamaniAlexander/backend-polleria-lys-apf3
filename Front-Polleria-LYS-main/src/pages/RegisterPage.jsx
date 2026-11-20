@@ -23,6 +23,8 @@ function Field({
   error,
   placeholder,
   autoComplete,
+  inputMode,
+  maxLength,
 }) {
   const id = `register-${name}`;
 
@@ -41,6 +43,8 @@ function Field({
         onChange={onChange}
         placeholder={placeholder}
         autoComplete={autoComplete}
+        inputMode={inputMode}
+        maxLength={maxLength ?? (name === 'nombre' || name === 'apellido' ? 120 : undefined)}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-error` : undefined}
       />
@@ -115,6 +119,7 @@ function RegisterPage() {
         navigate('/profile');
       }
     } catch (err) {
+      if (err.fieldErrors) setErrors(err.fieldErrors);
       setFormError(
         err.message || 'No se pudo completar el registro.'
       );

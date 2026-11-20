@@ -31,6 +31,8 @@ function Field({
         value={value}
         onChange={onChange}
         autoComplete={autoComplete}
+        maxLength={name === 'nombre' || name === 'apellido' ? 120 : name === 'telefono' ? 9 : undefined}
+        inputMode={name === 'telefono' ? 'numeric' : undefined}
         disabled={disabled}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-error` : undefined}
@@ -91,6 +93,7 @@ function DatosTab({ user }) {
       await authService.updateProfile(form);
       setSaved(true);
     } catch (err) {
+      if (err.fieldErrors) setErrors(err.fieldErrors);
       setFormError(err.message);
     } finally {
       setLoading(false);
