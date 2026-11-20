@@ -26,7 +26,7 @@ export function getCardCheckoutStatus(id) {
 
 export function redirectToCardCheckout(value) {
   const url = new URL(value)
-  if (url.origin !== 'https://checkout.stripe.com' || url.username || url.password || !url.pathname.startsWith('/c/pay/')) {
+  if (url.origin !== 'https://checkout.stripe.com' || url.username || url.password || !/^\/[cg]\/pay\/cs_(?:test|live)_[a-zA-Z0-9]+$/.test(url.pathname)) {
     throw new Error('No se pudo abrir Stripe Checkout.')
   }
   window.location.assign(url.href)

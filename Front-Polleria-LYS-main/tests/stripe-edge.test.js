@@ -28,7 +28,7 @@ function createFixture() {
   const sessionId = `cs_test_${attemptId.replaceAll('-', '')}`
   const intent = `pi_${attemptId.replaceAll('-', '')}`
   const wrongUser = randomUUID()
-  const checkoutUrl = `https://checkout.stripe.com/c/pay/${sessionId}`
+  const checkoutUrl = `https://checkout.stripe.com/g/pay/${sessionId}`
   const calls = []
   const refundRows = []
   const session = {
@@ -66,6 +66,7 @@ function createFixture() {
     }
     if (url.origin !== 'https://api.stripe.com') throw new Error('Proveedor inesperado')
     expect(options.headers.Authorization).toBe('Bearer sk_test_mock')
+    expect(options.headers['Stripe-Version']).toBe('2025-04-30.basil')
     if (path === '/v1/checkout/sessions') {
       session.amount_total = Number(options.body.get('line_items[0][price_data][unit_amount]'))
       return Response.json(session)
@@ -105,6 +106,7 @@ test('crea Stripe Checkout con el importe de InsForge y confirma una sola vez al
   expect(await response.json()).toEqual({ status: 'open', url: f.checkoutUrl })
   const creation = f.calls.find(call => call.path === '/v1/checkout/sessions')
   expect(creation.options.headers['Idempotency-Key']).toBe(`lys-checkout-${f.attemptId}`)
+  expect(creation.options.body.get('payment_method_types[0]')).toBe('card')
   expect(creation.options.body.get('success_url')).toBe(`${app}/checkout/resumen?pago_tarjeta=${f.attemptId}`)
   expect(f.session.amount_total).toBeGreaterThan(600)
   expect(creation.options.body.toString()).not.toContain('999999999')
@@ -150,4 +152,19 @@ test('reembolsa una vez si el pedido ya no puede confirmarse', async () => {
   } finally {
     await db.exec('UPDATE public.productos SET precio=precio-1 WHERE id=1')
   }
+})
+
+test('exige el secreto del webhook en un entorno alojado', async () => {
+  const request = async () => { throw new Error('El servidor no debe contactar proveedores'); }
+  const handler = createPaymentHandler({ env: key => key === 'STRIPE_WEBHOOK_SECRET' ? undefined : config[key], request })
+  const response = await handler(new Request(backend + '/functions/pago-tarjeta', { method: 'POST' }))
+  expect(response.status).toBe(503)
+})
+
+test('el modo loopback rechaza claves de pago real', async () => {
+  const local = { ...config, STRIPE_CHECKOUT_APP_URL: 'http://127.0.0.1:5180', STRIPE_MODE: 'live', STRIPE_SECRET_KEY: 'sk_live_mock' }
+  const request = async () => { throw new Error('El modo local no debe contactar Stripe en modo real'); }
+  const handler = createPaymentHandler({ allowLoopbackTest: true, env: key => local[key], request })
+  const response = await handler(new Request(backend + '/functions/pago-tarjeta', { method: 'POST' }))
+  expect(response.status).toBe(503)
 })

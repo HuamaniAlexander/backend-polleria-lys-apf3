@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:flujo": "node scripts/dev-flujo.mjs",
+    "dev:stripe": "node scripts/dev-flujo.mjs --stripe-test",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",

@@ -1,16 +1,22 @@
 // Backend de prueba aislado: PostgreSQL real (PGlite), RLS y RPC de las migraciones.
-// Solo escucha loopback. No contiene credenciales ni conexiones a InsForge remoto.
+// Solo escucha loopback. El modo Stripe de prueba conecta exclusivamente con Stripe.
 import http from 'node:http';
 import { randomBytes,createHmac,timingSafeEqual,scryptSync } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { createLocalStripeHandler, getTestStripeKey } from './local-stripe.mjs';
 import { createLocalDatabase,asLocalUser,localUsers } from './local-db.mjs';
 const port=Number(process.env.LOCAL_FLOW_PORT||5191);
-const db=await createLocalDatabase(process.env.LOCAL_FLOW_MEMORY==='1'?undefined:fileURLToPath(new URL('../../../.datos-pruebas-atenciones/',import.meta.url)),{inventory:true});
+const stripeTest = process.argv.includes('--stripe-test');
+const stripeKey = stripeTest ? getTestStripeKey(process.env.STRIPE_SECRET_KEY) : null;
+const dataDir = stripeTest ? '../../../.datos-stripe-pruebas/' : '../../../.datos-pruebas-atenciones/';
+const db=await createLocalDatabase(process.env.LOCAL_FLOW_MEMORY==='1'?undefined:fileURLToPath(new URL(dataDir,import.meta.url)),{inventory:true});
 const secret=randomBytes(32),salt=randomBytes(16),password=scryptSync('Local123!',salt,32);
 const sessions=new Map();
 const sign=part=>createHmac('sha256',secret).update(part).digest('base64url');
 function token(user){const part=Buffer.from('{"alg":"HS256","typ":"JWT"}').toString('base64url')+'.'+Buffer.from(JSON.stringify({sub:user.id,exp:Math.floor(Date.now()/1000)+3600})).toString('base64url');return part+'.'+sign(part);}
 function identity(req){const value=req.headers.authorization?.replace(/^Bearer /,'')||'';const parts=value.split('.');if(parts.length!==3)return null;const expected=sign(parts.slice(0,2).join('.'));if(expected.length!==parts[2].length||!timingSafeEqual(Buffer.from(expected),Buffer.from(parts[2])))return null;try{const claims=JSON.parse(Buffer.from(parts[1],'base64url'));return claims.exp>Date.now()/1000?localUsers.find(u=>u.id===claims.sub):null;}catch{return null;}}
+const checkout = stripeTest ? createLocalStripeHandler({ db, identity, port, stripeKey,
+  webhookSecret: process.env.STRIPE_WEBHOOK_SECRET }) : null;
 const authUser=u=>({id:u.id,email:u.email,emailVerified:true,profile:{name:u.rol+' Local'}});
 const reply=(res,status,data,headers={})=>{res.writeHead(status,{'Content-Type':'application/json',...headers});res.end(JSON.stringify(data));};
 const identifier=value=>{if(!/^[a-z_][a-z_0-9]*$/.test(value))throw new Error('Identificador inválido');return '"'+value+'"';};
@@ -70,7 +76,17 @@ const server=http.createServer(async(req,res)=>{
  res.setHeader('Access-Control-Expose-Headers','Content-Range');res.setHeader('Access-Control-Allow-Methods','GET,POST,PATCH,DELETE,OPTIONS');
  if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
  try{
-  const url=new URL(req.url,`http://127.0.0.1:${port}`);let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>100000)throw new Error('Solicitud demasiado grande');}const body=raw?JSON.parse(raw):{};
+  const url=new URL(req.url,`http://127.0.0.1:${port}`);let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>100000)throw new Error('Solicitud demasiado grande');}
+  if (checkout && url.pathname === '/functions/pago-tarjeta') {
+   const headers = new Headers();
+   for (const name of ['origin', 'authorization', 'stripe-signature']) {
+    if (req.headers[name]) headers.set(name, req.headers[name]);
+   }
+   const response = await checkout(new Request(url, {method:req.method,headers,body:req.method==='POST'?raw:undefined}));
+   res.writeHead(response.status, Object.fromEntries(response.headers));
+   return res.end(await response.text());
+  }
+  const body=raw?JSON.parse(raw):{};
   if(url.pathname==='/health')return reply(res,200,{mode:'local',database:'PostgreSQL/PGlite',remote:false});
   if(url.pathname==='/api/auth/public-config')return reply(res,200,{oAuthProviders:[],requireEmailVerification:false});
   if(url.pathname==='/api/auth/sessions'){

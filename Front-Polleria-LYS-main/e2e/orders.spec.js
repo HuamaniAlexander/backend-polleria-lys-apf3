@@ -103,7 +103,7 @@ test('envía a Stripe sin datos de tarjeta y confirma al regresar con el mismo i
     edgeRequests.push(body)
     if (body.action === 'start') intentId = body.id
     const data = body.action === 'start'
-      ? { status: 'open', url: 'https://checkout.stripe.com/c/pay/cs_test_browser' }
+      ? { status: 'open', url: 'https://checkout.stripe.com/g/pay/cs_test_browser' }
       : { status: 'confirmed', orderId: intentId }
     await route.fulfill({ json: data, headers: { 'Access-Control-Allow-Origin': '*' } })
   })
@@ -114,7 +114,7 @@ test('envía a Stripe sin datos de tarjeta y confirma al regresar con el mismo i
   await expect(page.locator('input[autocomplete^="cc-"]')).toHaveCount(0)
   await page.getByRole('button', { name: 'Ver resumen' }).click()
   await page.getByRole('button', { name: 'Pagar con Stripe' }).click()
-  await expect(page).toHaveURL(/^https:\/\/checkout\.stripe\.com\/c\/pay\//)
+  await expect(page).toHaveURL(/^https:\/\/checkout\.stripe\.com\/g\/pay\//)
   expect(edgeRequests).toEqual([{ action: 'start', id: intentId, tipo: 'delivery', articulos: [{ id: 1, qty: 1 }], entrega: form }])
 
   await page.goto(`/checkout/resumen?pago_tarjeta=${intentId}`)

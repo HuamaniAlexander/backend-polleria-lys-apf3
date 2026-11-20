@@ -3,6 +3,7 @@ const SESSION = /^cs_(test|live)_[a-zA-Z0-9]+$/
 const PAYMENT_INTENT = /^pi_[a-zA-Z0-9]+$/
 const CHECKOUT_PATH = '/checkout/resumen'
 const STRIPE_URL = 'https://api.stripe.com/v1/'
+const STRIPE_API_VERSION = '2025-04-30.basil'
 const MAX_BODY = 64 * 1024
 
 class PaymentError extends Error {
@@ -12,9 +13,10 @@ class PaymentError extends Error {
   }
 }
 
-function httpsOrigin(value) {
+function paymentOrigin(value, allowLoopbackTest) {
   const url = new URL(value)
-  if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+  const isLoopback = allowLoopbackTest && url.protocol === 'http:' && url.hostname === '127.0.0.1'
+  if ((!isLoopback && url.protocol !== 'https:') || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
     throw new Error('Origen de pagos inválido.')
   }
   return url.origin
@@ -90,9 +92,9 @@ async function verifyWebhook(raw, header, secret) {
   return false
 }
 
-export function createPaymentHandler({ env, request = fetch }) {
-  const send = (url, options) => request(url, {
-    ...options, redirect: 'error', signal: AbortSignal.timeout(8000),
+export function createPaymentHandler({ env, request = fetch, allowLoopbackTest = false }) {
+  const send = (url, options, timeout = 8000) => request(url, {
+    ...options, redirect: 'error', signal: AbortSignal.timeout(timeout),
   })
 
   return async function handlePayment(req) {
@@ -102,7 +104,7 @@ export function createPaymentHandler({ env, request = fetch }) {
     })
 
     try {
-      const app = httpsOrigin(env('STRIPE_CHECKOUT_APP_URL'))
+      const app = paymentOrigin(env('STRIPE_CHECKOUT_APP_URL'), allowLoopbackTest)
       const origin = req.headers.get('Origin')
       if (origin === app) {
         cors = {
@@ -117,14 +119,16 @@ export function createPaymentHandler({ env, request = fetch }) {
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
       if (req.method !== 'POST') throw new PaymentError(405, 'Método no permitido.')
 
-      const base = httpsOrigin(env('INSFORGE_BASE_URL'))
+      const base = paymentOrigin(env('INSFORGE_BASE_URL'), allowLoopbackTest)
       const adminKey = env('INSFORGE_API_KEY')
       const mode = env('STRIPE_MODE')
       const stripeKey = env('STRIPE_SECRET_KEY')
       const secret = env('STRIPE_WEBHOOK_SECRET')
-      if (!adminKey || !['test', 'live'].includes(mode) ||
-          !new RegExp(`^(sk|rk)_${mode}_`).test(stripeKey || '') || !secret?.startsWith('whsec_')) {
-        throw new Error('Configuración de pagos incompleta.')
+      const allowedModes = allowLoopbackTest ? ['test'] : ['test', 'live']
+      const webhookConfigured = secret?.startsWith('whsec_')
+      if (!adminKey || !allowedModes.includes(mode) ||
+          !new RegExp(`^(sk|rk)_${mode}_`).test(stripeKey || '') || (!allowLoopbackTest && !webhookConfigured)) {
+        throw new PaymentError(503, 'El servidor de pagos aún no está configurado.')
       }
 
       async function rpc(name, body) {
@@ -140,6 +144,7 @@ export function createPaymentHandler({ env, request = fetch }) {
           if (name === 'preparar_pago_tarjeta' && error.code === '42501') {
             throw new PaymentError(403, 'La cuenta o el intento de pago no están autorizados.')
           }
+          console.warn('RPC de pagos rechazada.', name, result.status, diagnosticCode(error.code))
           throw new Error('Error de la base de datos de pagos.')
         }
         if (name === 'vincular_sesion_tarjeta' || name === 'registrar_reembolso_tarjeta') return
@@ -147,13 +152,18 @@ export function createPaymentHandler({ env, request = fetch }) {
       }
 
       async function stripe(path, params, idempotencyKey) {
-        const headers = { Authorization: `Bearer ${stripeKey}` }
+        const headers = { Authorization: `Bearer ${stripeKey}`, 'Stripe-Version': STRIPE_API_VERSION }
         if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey
         if (params) headers['Content-Type'] = 'application/x-www-form-urlencoded'
         const result = await send(STRIPE_URL + path, {
           method: params ? 'POST' : 'GET', headers, body: params,
-        })
-        if (!result.ok) throw new Error('Stripe no confirmó la operación.')
+        }, 20000)
+        if (!result.ok) {
+          const payload = await result.json().catch(() => null)
+          const details = payload?.error
+          console.warn('Operación rechazada por Stripe.', result.status, diagnosticCode(details?.code || details?.type), diagnosticCode(details?.param))
+          throw new Error('Stripe no confirmó la operación.')
+        }
         return result.json()
       }
 
@@ -172,7 +182,7 @@ export function createPaymentHandler({ env, request = fetch }) {
           throw new Error('La sesión no corresponde a la cotización.')
         }
         if (session.status === 'expired') return { status: 'expired' }
-        if (session.status === 'open') return { status: 'open', url: checkoutUrl(session.url) }
+        if (session.status === 'open') return { status: 'open', url: checkoutUrl(session.url, session.id) }
         if (session.status !== 'complete' || session.payment_status !== 'paid') return { status: 'processing' }
         if (!PAYMENT_INTENT.test(session.payment_intent)) throw new Error('El pago carece de referencia.')
 
@@ -199,6 +209,7 @@ export function createPaymentHandler({ env, request = fetch }) {
 
       const signature = req.headers.get('Stripe-Signature')
       if (signature !== null) {
+        if (!webhookConfigured) throw new PaymentError(503, 'El webhook de pagos todavía no está configurado.')
         const raw = await readBody(req)
         if (!await verifyWebhook(raw, signature, secret)) throw new PaymentError(400, 'Firma de Stripe inválida.')
         const event = parseBody(raw)
@@ -257,19 +268,26 @@ export function createPaymentHandler({ env, request = fetch }) {
       if (!SESSION.test(session.id) || session.livemode !== (mode === 'live')) {
         throw new Error('Stripe no devolvió una sesión válida.')
       }
-      const url = checkoutUrl(session.url)
+      const url = checkoutUrl(session.url, session.id)
       await rpc('vincular_sesion_tarjeta', { ...args, p_sesion: session.id })
       return respond({ status: 'open', url })
     } catch (error) {
       if (error instanceof PaymentError) return respond({ error: 'PAYMENT_REQUEST_FAILED', message: error.message }, error.status)
+      if (allowLoopbackTest) console.warn('Pago local no disponible.', error.name, diagnosticCode(error.cause?.code))
       return respond({ error: 'PAYMENT_UNAVAILABLE', message: 'No se pudo confirmar la operación de pago. Intenta nuevamente.' }, 502)
     }
   }
 }
 
-function checkoutUrl(value) {
+function diagnosticCode(value) {
+  if (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_]{0,47}$/.test(value)) return 'desconocido'
+  return value
+}
+
+function checkoutUrl(value, sessionId) {
   const url = new URL(value)
-  if (url.origin !== 'https://checkout.stripe.com' || url.username || url.password || !url.pathname.startsWith('/c/pay/')) {
+  const validPath = url.pathname === `/c/pay/${sessionId}` || url.pathname === `/g/pay/${sessionId}`
+  if (url.origin !== 'https://checkout.stripe.com' || url.username || url.password || !validPath) {
     throw new Error('URL de Checkout inválida.')
   }
   return url.href
