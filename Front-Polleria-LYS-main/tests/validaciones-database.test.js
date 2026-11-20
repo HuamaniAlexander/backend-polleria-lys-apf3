@@ -17,9 +17,7 @@ beforeAll(async () => {
   const legacy = randomUUID()
   await db.query('INSERT INTO auth.users(id,profile) VALUES($1,$2)', [legacy, { name: 'Legado123' }])
   before = (await db.query('SELECT id,nombre,apellido,telefono,rol,preferencias FROM public.perfiles ORDER BY id')).rows
-  for (const name of ['20261120010000_perfiles-validacion.sql', '20261120011000_entrega-validacion.sql']) {
-    await db.exec(await readFile(new URL('../../migrations/validacion/' + name, import.meta.url), 'utf8'))
-  }
+  await db.exec(await readFile(new URL('../../migrations/validacion/20261120131000_validaciones-carrito-perfiles.sql', import.meta.url), 'utf8'))
 }, 60000)
 afterAll(async () => { await db?.close() })
 
@@ -59,7 +57,7 @@ test('el alta que inserta el perfil rechaza nombres numéricos y revierte el usu
   expect((await db.query('SELECT id FROM auth.users WHERE id=$1', [id])).rows).toEqual([])
 })
 
-test.each([{ name: 'Cliente123' }, { phone: 987654321 }, { address: {} }, { reference: 'x'.repeat(151) }, { location: { lat: 0, lng: 0, outOfZone: false } }])('la RPC bloquea los datos de entrega manipulados: %j', async changes => {
+test.each([{ name: 'Cliente123' }, { phone: 987654321 }, { address: {} }, { address: 'a'.repeat(151) }, { reference: 'x'.repeat(151) }, { location: { lat: 0, lng: 0, outOfZone: false } }])('la RPC bloquea los datos de entrega manipulados: %j', async changes => {
   const id = randomUUID()
   await expect(order({ ...valid, ...changes }, undefined, id)).rejects.toThrow()
   expect((await db.query('SELECT id FROM public.pedidos WHERE id=$1', [id])).rows).toEqual([])
@@ -75,9 +73,9 @@ test('conserva precios de servidor, inventario e idempotencia y no expone la fun
   await expect(asClient(tx => tx.query('SELECT public.crear_pedido_cliente_validacion_base($1,$2,$3,$4,$5)', [randomUUID(), 'recojo', [{ id: 1, qty: 1 }], valid, 'efectivo']))).rejects.toThrow(/permission denied/)
 })
 
-test('la RPC acepta una referencia de exactamente 150 caracteres', async () => {
+test('la RPC acepta dirección y referencia de exactamente 150 caracteres', async () => {
   const id = randomUUID(), reference = 'r'.repeat(150)
-  await order({ ...valid, reference }, undefined, id)
+  await order({ ...valid, address: 'a'.repeat(150), reference }, undefined, id)
   expect((await db.query('SELECT destinatario FROM public.pedidos WHERE id=$1', [id])).rows[0].destinatario.reference).toBe(reference)
 })
 

@@ -2,6 +2,15 @@ import { describe, expect, test } from 'vitest'
 import { validateDeliveryForm } from '../src/utils/deliveryValidation'
 
 describe('Validaciones del formulario de entrega y checkout', () => {
+  test('la dirección admite 150 caracteres y rechaza 151 antes de enviar', () => {
+    for (const length of [150, 151]) {
+      const address = 'a'.repeat(length)
+      const errors = validateDeliveryForm({ name: 'Cliente Prueba', phone: '987654321', address,
+        location: { lat: -11.88, lng: -77.03, address } })
+      if (length === 150) expect(errors).toEqual({})
+      else expect(errors.address).toContain('150 caracteres')
+    }
+  })
   test('la referencia es opcional y admite hasta 150 caracteres', () => {
     const form = { name: 'Cliente Prueba', phone: '987654321' }
     for (const reference of [undefined, '', 'r'.repeat(150)]) {

@@ -235,7 +235,7 @@ test('entrega respeta límites aunque se manipule maxlength y se pegue texto', a
   const fields = [
     [page.getByPlaceholder('Ej. María Torres López'), 120, 'a'],
     [page.getByPlaceholder('Ej. Frente al parque, fachada azul, piso 2...'), 150, 'r'],
-    [page.getByRole('combobox'), 250, 'c'],
+    [page.getByRole('combobox'), 150, 'c'],
     [page.getByPlaceholder('9XXXXXXXX'), 9, '9'],
   ]
   for (const [input, limit, character] of fields) {

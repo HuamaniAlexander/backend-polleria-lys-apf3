@@ -32,7 +32,7 @@ BEGIN
   END IF;
   IF tipo_entrega = 'delivery' THEN
     IF jsonb_typeof(datos_entrega->'address') IS DISTINCT FROM 'string' OR
-       char_length(btrim(datos_entrega->>'address')) < 5 OR char_length(datos_entrega->>'address') > 250 OR
+       char_length(btrim(datos_entrega->>'address')) < 5 OR char_length(datos_entrega->>'address') > 150 OR
        (datos_entrega->>'address') ~ '[[:cntrl:]]' THEN
       RAISE EXCEPTION 'Dirección inválida' USING ERRCODE = '22023';
     END IF;
