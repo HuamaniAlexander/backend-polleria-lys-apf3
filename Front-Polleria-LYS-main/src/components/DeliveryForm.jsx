@@ -1,38 +1,13 @@
 import { MapPin, Store } from 'lucide-react'
 import AddressAutocomplete from './AddressAutocomplete'
 import DeliveryMap from './DeliveryMap'
+import PersonNameInput from './common/PersonNameInput'
 
 export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeChange, onFormChange, onContinue }) {
   function handlePhoneChange(event) {
     const digitsOnly = event.target.value.replace(/\D/g, '').slice(0, 9)
     if (digitsOnly && digitsOnly[0] !== '9') return
     onFormChange('phone', digitsOnly)
-  }
-
-  function handleNameChange(event) {
-    const noNumbers = event.target.value.replace(/[0-9]/g, '')
-    onFormChange('name', noNumbers)
-  }
-
-  function handleNameKeyDown(event) {
-    if (event.ctrlKey || event.metaKey || event.altKey) return
-    if (/[0-9]/.test(event.key)) {
-      event.preventDefault()
-    }
-  }
-
-  function handleNamePaste(event) {
-    const paste = (event.clipboardData || window.clipboardData)?.getData('text') || ''
-    if (/[0-9]/.test(paste)) {
-      event.preventDefault()
-      const sanitized = paste.replace(/[0-9]/g, '')
-      const input = event.target
-      const start = input.selectionStart || 0
-      const end = input.selectionEnd || 0
-      const current = form.name || ''
-      const updated = (current.slice(0, start) + sanitized + current.slice(end)).slice(0, 50)
-      onFormChange('name', updated)
-    }
   }
 
   return (
@@ -58,12 +33,10 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
       <div className="delivery-form-grid">
         <label className="checkout-field-label">
           Nombre completo
-          <input
+          <PersonNameInput
             className={`lys-input ${errors.name ? 'err' : ''}`}
             value={form.name || ''}
-            onChange={handleNameChange}
-            onKeyDown={handleNameKeyDown}
-            onPaste={handleNamePaste}
+            onChange={event => onFormChange('name', event.target.value)}
             placeholder="Ej. María Torres López"
             maxLength={120}
           />

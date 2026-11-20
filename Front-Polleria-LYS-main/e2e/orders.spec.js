@@ -83,6 +83,32 @@ test('un nombre numérico guardado en localStorage bloquea saltarse entrega y co
   expect(confirmations).toHaveLength(0);
 });
 
+test('el nombre de entrega impide números al escribir, pegar o rellenar el input', async ({ page }) => {
+  await backend(page);
+  await page.route('https://*.tile.openstreetmap.org/**', route => route.abort());
+  await page.goto('/checkout/entrega');
+  const input = page.getByPlaceholder('Ej. María Torres López');
+  await input.fill('');
+  await input.pressSequentially('María123');
+  await expect(input).toHaveValue('María');
+  await input.fill('');
+  await input.evaluate(element => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', '123١٢٣１２３');
+    element.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+  });
+  await expect(input).toHaveValue('');
+  await input.evaluate(element => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', 'María2 Torres3');
+    element.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+  });
+  await expect(input).toHaveValue('María Torres');
+  await input.fill('María99 Torres88');
+  await expect(input).toHaveValue('María Torres');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('lys-checkout-delivery')).form.name)).toBe('María Torres');
+});
+
 for (const quantity of [-1, 1.5, '2', 101]) {
   test(`un carrito alterado con cantidad ${JSON.stringify(quantity)} no permite confirmar`, async ({ page }) => {
     const { confirmations } = await backend(page);
