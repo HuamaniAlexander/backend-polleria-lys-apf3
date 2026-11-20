@@ -65,6 +65,17 @@ function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    if (!query.has('token')) return;
+
+    query.delete('token');
+    navigate({ pathname: location.pathname, search: query.toString(), hash: location.hash }, {
+      replace: true,
+      state: location.state,
+    });
+  }, [location, navigate]);
+
+  useEffect(() => {
     if (!success) return;
 
     const timer = setTimeout(() => {

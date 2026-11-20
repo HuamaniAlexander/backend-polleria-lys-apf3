@@ -102,6 +102,17 @@ test('recuperacion nunca muestra codigo y usa el token de correo', async ({ page
   await expect(page.getByRole('status')).toContainText('se actualizó correctamente');
   expect(calls.find(c => c.path.endsWith('/email/reset-password')).body.otp).toBe('email-proof-token');
 });
+test('retira el token de recuperación de la URL y permite utilizar el enlace', async ({ page }) => {
+  const calls = await backend(page);
+  await page.goto('/reset-password?insforge_status=ready&token=email-proof-token');
+  await expect(page).toHaveURL(/reset-password\?insforge_status=ready$/);
+  await expect(page.getByLabel('Código de verificación')).toHaveCount(0);
+  await page.getByLabel('Nueva contraseña', { exact: true }).fill('NewSecure123');
+  await page.getByLabel('Confirmar nueva contraseña').fill('NewSecure123');
+  await page.getByRole('button', { name: 'Restablecer contraseña', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('se actualizó correctamente');
+  expect(calls.find(c => c.path.endsWith('/email/reset-password')).body.otp).toBe('email-proof-token');
+});
 test('Google usa callback y perfil del servidor', async ({ page }) => {
   const calls = await backend(page);
   await page.goto('/login');
