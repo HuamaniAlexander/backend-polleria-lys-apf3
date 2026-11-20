@@ -138,3 +138,38 @@ test('reserva limita el celular y respeta la capacidad aunque se cambien los atr
  await page.getByRole('button', { name: 'Guardar reserva' }).click();
  await expect(page.getByRole('button', { name: /Mesa 08/ })).toContainText(/reservada/i);
 });
+
+test('confirmar comanda pide confirmar cuando las porciones suman más de diez pollos', async ({ page }) => {
+ await login(page, 'mesera');
+ const agregar = nombre => page.locator('.plato-card').filter({ has: page.getByText(nombre, { exact: true }) })
+   .getByTitle('Agregar a la comanda', { exact: true });
+ const confirmar = page.getByRole('button', { name: 'Confirmar comanda', exact: true });
+
+ await page.goto('/mesas/10/pedido');
+ for (let i = 0; i < 10; i++) await agregar('Pollo a la brasa entero').click();
+ await confirmar.click();
+ await expect(page).toHaveURL(/\/mesas$/);
+
+ await page.goto('/mesas/09/pedido');
+ for (let i = 0; i < 10; i++) await agregar('Pollo a la brasa entero').click();
+ await agregar('1/2 Pollo a la brasa').click();
+ await agregar('1/2 Pollo a la brasa').click();
+
+ const [mensaje] = await Promise.all([
+  page.waitForEvent('dialog').then(async dialog => {
+   const message = dialog.message();
+   await dialog.dismiss();
+   return message;
+  }),
+  confirmar.click(),
+ ]);
+ expect(mensaje).toContain('11 pollos');
+ await expect(page).toHaveURL(/\/mesas\/09\/pedido$/);
+ await expect(page.locator('.stepper-qty')).toHaveText(['10', '2']);
+ expect((await snapshot(page)).cuentas.some(cuenta => Number(cuenta.mesa_id) === 9)).toBe(false);
+
+ page.once('dialog', dialog => dialog.accept());
+ await confirmar.click();
+ await expect(page).toHaveURL(/\/mesas$/);
+ await expect(page.getByRole('button', { name: /Mesa 09/ })).toContainText(/ocupada/i);
+});

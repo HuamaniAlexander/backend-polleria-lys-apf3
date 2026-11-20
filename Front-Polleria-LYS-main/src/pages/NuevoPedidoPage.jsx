@@ -25,6 +25,8 @@ import * as authService from '../services/authService';
 import {FLOW_PREVIEW} from '../services/atencionService';
 import '../styles/nuevoPedido.css';
 
+const UMBRAL_CONFIRMACION_POLLOS = 10;
+
 function getCategoryIcon(catId) {
   switch (catId) {
     case 'pollos':
@@ -220,10 +222,37 @@ function NuevoPedidoForm({ numeroNormalizado }) {
   const [enviando, setEnviando] = useState(false);
 
   async function handleEnviarCocina() {
+    if (enviando) return;
     if (itemsComanda.length === 0) {
       setToastMsg('La comanda está vacía. Selecciona al menos un producto.');
       setTimeout(() => setToastMsg(''), 3000);
       return;
+    }
+
+    if (!carta.data) {
+      setToastMsg(cargandoCatalogo ? 'Espera a que cargue la carta.' : 'No se pudo cargar la carta. Intenta confirmar de nuevo.');
+      if (!cargandoCatalogo) carta.retry();
+      return;
+    }
+
+    const productosPorId = new Map(listaProductos.map(producto => [String(producto.id), producto]));
+    let pollos = 0;
+    for (const item of itemsComanda) {
+      const producto = productosPorId.get(String(item.id));
+      if (!producto) {
+        setToastMsg(`Retira ${item.nombre} de la comanda porque ya no está en la carta.`);
+        return;
+      }
+      if (producto.inventoryId === 'pollo-brasa') {
+        pollos += item.cantidad * producto.inventoryConsumption / producto.inventoryScale;
+      }
+    }
+
+    if (pollos > UMBRAL_CONFIRMACION_POLLOS) {
+      const cantidad = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 3 }).format(pollos);
+      if (!window.confirm(`¿Confirmas enviar una comanda con ${cantidad} pollos? Revisa la cantidad antes de continuar.`)) {
+        return;
+      }
     }
 
     setEnviando(true);
