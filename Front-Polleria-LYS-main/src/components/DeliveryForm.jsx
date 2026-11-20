@@ -65,7 +65,7 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
             onKeyDown={handleNameKeyDown}
             onPaste={handleNamePaste}
             placeholder="Ej. María Torres López"
-            maxLength={50}
+            maxLength={120}
           />
           {errors.name && <span className="checkout-field-error">{errors.name}</span>}
         </label>
@@ -92,12 +92,13 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
             <label className="checkout-field-label">
               Referencia (opcional)
               <input
-                className="lys-input"
+                className={`lys-input ${errors.reference ? 'err' : ''}`}
                 value={form.reference || ''}
                 onChange={(event) => onFormChange('reference', event.target.value)}
                 placeholder="Ej. Frente al parque, fachada azul, piso 2..."
-                maxLength={80}
+                maxLength={500}
               />
+              {errors.reference && <span className="checkout-field-error">{errors.reference}</span>}
             </label>
 
             {/* Mapa interactivo delimitado al distrito de Carabayllo */}
