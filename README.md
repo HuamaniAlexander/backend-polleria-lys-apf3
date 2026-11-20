@@ -5,9 +5,17 @@ Frontend en **React + Vite** y Backend/Base de Datos en **PostgreSQL administrad
 
 ---
 
-## Cuentas de prueba
+##  Credenciales de Prueba
 
-Usa cuentas provisionadas para cada rol en un entorno de pruebas. Para reproducir el flujo con usuarios ficticios y una base local, consulta [Flujo de atenciones local](docs/flujo-atenciones-local.md).
+Solicita al equipo las cuentas de prueba para revisar los roles y permisos del sistema:
+
+| Rol | Correo Electrónico | Contraseña | Módulos con Acceso |
+| :--- | :--- | :--- | :--- |
+| **Administrador** | Solicitar al equipo | Entrega privada | Dashboard, Mesas, Cocina, Caja y Perfil |
+| **Caja** | Solicitar al equipo | Entrega privada | Módulo de Cobros / Caja y Perfil |
+| **Cocinero** | Solicitar al equipo | Entrega privada | Panel de Pedidos en Cocina y Perfil |
+| **Mesero** | Solicitar al equipo | Entrega privada | Toma de Pedidos en Mesas y Perfil |
+| **Cliente / Usuario** | Solicitar al equipo | Entrega privada | Catálogo, Carrito, Checkout, Mis Pedidos y Perfil |
 
 * **Despliegue en producción:** [https://back-polleria-lys.vercel.app](https://back-polleria-lys.vercel.app)
 
@@ -39,10 +47,6 @@ npm run dev
 La aplicación abrirá en: **`http://localhost:5173`**
 
 ---
-
-## Pagos con tarjeta
-
-Consulta [Pagos con Stripe e InsForge](docs/pagos-stripe-insforge.md) para configurar la función y validar el flujo con Stripe en modo de prueba.
 
 ##  Pruebas y Construcción
 
