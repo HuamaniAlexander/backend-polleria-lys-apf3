@@ -63,35 +63,34 @@ function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   function handleChange(e) {
-  const { name, value } = e.target;
+    const { name, value } = e.target;
 
-  let newValue = value;
+    let newValue = value;
 
-  if (name === 'telefono') {
-    // Elimina letras, espacios y símbolos
-    newValue = value.replace(/\D/g, '');
+    if (name === 'nombre' || name === 'apellido') {
+      newValue = value.replace(/[^\p{L}\p{M} ]/gu, '');
+    }
 
-    // Máximo 9 números
-    newValue = newValue.slice(0, 9);
+    if (name === 'telefono') {
+      newValue = value.replace(/\D/g, '').slice(0, 9);
 
-    // Si escribe algo, debe comenzar con 9
-    if (newValue.length > 0 && !newValue.startsWith('9')) {
-      return;
+      if (newValue.length > 0 && !newValue.startsWith('9')) {
+        return;
+      }
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      [name]: newValue,
+    }));
+
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: null,
+      }));
     }
   }
-
-  setForm((prev) => ({
-    ...prev,
-    [name]: newValue,
-  }));
-
-  if (errors[name]) {
-    setErrors((prev) => ({
-      ...prev,
-      [name]: null,
-    }));
-  }
-}
 
   async function handleSubmit(e) {
     e.preventDefault();

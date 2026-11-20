@@ -7,6 +7,13 @@
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^9\d{8}$/;
+const NAME_REGEX = /^\p{L}+(?: +\p{L}+)*$/u;
+
+function isValidRegistrationName(value) {
+  const name = (value || '').trim().normalize('NFC');
+  const length = [...name].length;
+  return length >= 2 && length <= 40 && NAME_REGEX.test(name);
+}
 
 export function isValidEmail(email) {
   return EMAIL_REGEX.test((email || '').trim());
@@ -43,11 +50,11 @@ export function validateLoginForm(form) {
 export function validateRegisterForm(form) {
   const errors = {};
 
-  if (!form.nombre || form.nombre.trim().length < 2) {
-    errors.nombre = 'Ingresa tu nombre (mínimo 2 caracteres).';
+  if (!isValidRegistrationName(form.nombre)) {
+    errors.nombre = 'Ingresa un nombre de 2 a 40 caracteres. Solo se permiten letras y espacios entre palabras.';
   }
-  if (!form.apellido || form.apellido.trim().length < 2) {
-    errors.apellido = 'Ingresa tu apellido (mínimo 2 caracteres).';
+  if (!isValidRegistrationName(form.apellido)) {
+    errors.apellido = 'Ingresa un apellido de 2 a 40 caracteres. Solo se permiten letras y espacios entre palabras.';
   }
   if (!form.email) {
     errors.email = 'Ingresa tu correo electrónico.';
