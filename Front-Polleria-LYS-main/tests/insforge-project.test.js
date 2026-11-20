@@ -23,4 +23,6 @@ test('el backend local solo se admite con habilitación explícita y clave públ
   expect(getConfigurationError('http://127.0.0.1:5191', 'local-public-anon', { localPreview: true })).toBeNull()
   expect(getConfigurationError('http://127.0.0.1:5191', 'ik_private', { localPreview: true })).not.toBeNull()
   expect(getConfigurationError('http://127.0.0.1:5192', 'local-public-anon', { localPreview: true })).not.toBeNull()
+  expect(getConfigurationError('http://127.0.0.1:5192', 'local-public-anon', { localPreview: true, localPort: '5192' })).toBeNull()
+  expect(getConfigurationError('http://192.0.2.1:5192', 'local-public-anon', { localPreview: true, localPort: '5192' })).not.toBeNull()
 })

@@ -4,11 +4,11 @@ export const INSFORGE_PROJECT = {
   baseUrl: 'https://8bwzqx2s.us-east.insforge.app',
 }
 
-export function getConfigurationError(baseUrl, anonKey, { localPreview = false } = {}) {
+export function getConfigurationError(baseUrl, anonKey, { localPreview = false, localPort = '5191' } = {}) {
   if (!baseUrl || !anonKey || anonKey.startsWith('ik_') || anonKey === 'replace_with_public_anon_key') {
     return 'Configura VITE_INSFORGE_BASE_URL y VITE_INSFORGE_ANON_KEY en .env.local. Usa la clave pública, nunca la API key privada.'
   }
-  if (localPreview && baseUrl === 'http://127.0.0.1:5191' && anonKey === 'local-public-anon') return null
+  if (localPreview && /^[0-9]{1,5}$/.test(localPort) && baseUrl === 'http://127.0.0.1:' + localPort && anonKey === 'local-public-anon') return null
   if (baseUrl.replace(/\/$/, '') !== INSFORGE_PROJECT.baseUrl) {
     return `La URL de InsForge debe corresponder a ${INSFORGE_PROJECT.name}: ${INSFORGE_PROJECT.baseUrl}. Obtén también la clave pública de ese proyecto.`
   }

@@ -1,6 +1,9 @@
 import { SEED_MESAS, SEED_ACTIVIDADES, ESTADOS_MESA } from '../data/mesasData';
 import { requireInsforge } from '../lib/insforge';
 import { getCurrentUser } from './authService';
+import { getPersonNameError, normalizePersonName } from '../utils/identityValidation';
+import { isValidPhone } from './validators';
+import { getReservationTimeError } from '../utils/reservationTime';
 import { FLOW_PREVIEW, getFlowMesas, operateFlow, pendingKitchen, openIncident } from './atencionService';
 
 const MESAS_KEY = 'lys_mesas';
@@ -342,17 +345,41 @@ export function ocuparMesa(numero, pedidoId, total = 0) {
   return actualizadas.find((m) => String(m.numero).padStart(2, '0') === numNormalizado);
 }
 
-export async function reservarMesa(numero, { cliente, hora, comensales, telefono } = {}) {
+export async function reservarMesa(numero, { cliente, hora, comensales, telefono = '' } = {}) {
   const mesa = getMesaByNumero(numero);
   if (!mesa?.id) throw new Error('La mesa no existe.');
-  if(FLOW_PREVIEW){await operateFlow('reservar',{mesa:mesa.id,cliente,hora,telefono,comensales:Number(comensales)||mesa.capacidad});await fetchMesas({strict:true});return getMesaByNumero(numero);}
+
+  const errorNombre = getPersonNameError(cliente, { label: 'nombre del cliente o grupo', requiredMessage: 'Ingresa un nombre de al menos 2 caracteres.' });
+  if (errorNombre) throw new Error(errorNombre);
+  const errorHora = getReservationTimeError(hora);
+  if (errorHora) throw new Error(errorHora);
+
+  const personas = typeof comensales === 'string' && /^[0-9]+$/.test(comensales)
+    ? Number(comensales)
+    : comensales;
+  if (!Number.isInteger(personas) || personas < 1 || personas > mesa.capacidad) {
+    throw new Error(`Ingresa entre 1 y ${mesa.capacidad} comensales para esta mesa.`);
+  }
+
+  const celular = typeof (telefono ?? '') === 'string' ? (telefono ?? '').replace(/ /g, '') : null;
+  if (celular === null || (celular !== '' && (celular.length !== 9 || !isValidPhone(celular)))) {
+    throw new Error('El celular debe comenzar con 9 y tener 9 dígitos.');
+  }
+
+  const nombre = normalizePersonName(cliente);
+  if (FLOW_PREVIEW) {
+    await operateFlow('reservar', { mesa: mesa.id, cliente: nombre, hora, telefono: celular, comensales: personas });
+    await fetchMesas({ strict: true });
+    return getMesaByNumero(numero);
+  }
+
   const { db } = getDbClient();
   unwrap(await db.rpc('reservar_mesa_salon', {
     p_mesa_id: Number(mesa.id),
-    p_cliente: (cliente || '').trim(),
-    p_hora: hora || '20:00',
-    p_telefono: (telefono || '').trim(),
-    p_comensales: Number(comensales) || mesa.capacidad,
+    p_cliente: nombre,
+    p_hora: hora,
+    p_telefono: celular,
+    p_comensales: personas,
   }), 'No se pudo registrar la reserva en el servidor.');
 
   await fetchMesas();

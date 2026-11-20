@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { createLocalDatabase,asLocalUser,localUsers } from './local-db.mjs';
 const port=Number(process.env.LOCAL_FLOW_PORT||5191);
 const db=await createLocalDatabase(process.env.LOCAL_FLOW_MEMORY==='1'?undefined:fileURLToPath(new URL('../../../.datos-pruebas-atenciones/',import.meta.url)),{inventory:true});
+if (process.env.LOCAL_FLOW_MEMORY === '1' && process.env.LOCAL_FLOW_TEST_CLOCK === '1') {
+  await db.exec("CREATE OR REPLACE FUNCTION public.hora_lima_reservas() RETURNS time LANGUAGE sql STABLE SET search_path = '' AS $$ SELECT TIME '17:00' $$");
+}
 const secret=randomBytes(32),salt=randomBytes(16),password=scryptSync('Local123!',salt,32);
 const sessions=new Map();
 const sign=part=>createHmac('sha256',secret).update(part).digest('base64url');

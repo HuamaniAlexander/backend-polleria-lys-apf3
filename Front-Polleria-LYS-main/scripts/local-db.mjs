@@ -12,11 +12,16 @@ async function applyRealtimeMigrations(db) {
   }
 }
 
+async function applyReservationValidation(db) {
+  await db.exec(await readFile(new URL('../../migrations/validacion/20261120140000_reservas-validacion.sql', import.meta.url), 'utf8'));
+}
+
 export async function createLocalDatabase(dataDir, { beforePreview, inventory = false } = {}) {
   const db = new PGlite(dataDir);
   if ((await db.query("SELECT to_regclass('public.atenciones_salon') AS ready")).rows[0].ready) {
     if(inventory && !(await db.query("SELECT to_regclass('public.inventario_recursos') AS ready")).rows[0].ready)
       await db.exec(await readFile(new URL('../../migrations/inventario/20261116020000_inventario-compartido.sql',import.meta.url),'utf8'));
+    await applyReservationValidation(db);
     await applyRealtimeMigrations(db);
     return db;
   }
@@ -45,6 +50,7 @@ export async function createLocalDatabase(dataDir, { beforePreview, inventory = 
     await db.query('INSERT INTO auth.users(id) VALUES($1) ON CONFLICT DO NOTHING',[user.id]);
     await db.query('UPDATE public.perfiles SET rol=$2,nombre=$3,apellido=$4 WHERE id=$1',[user.id,user.rol,user.rol,'Local']);
   }
+  await applyReservationValidation(db);
   if(beforePreview) await beforePreview(db);
   const preview=new URL('../../migrations/atenciones/',import.meta.url);
   for(const name of (await readdir(preview)).filter(name=>name.endsWith('.sql')).sort()) await db.exec(await readFile(new URL(name,preview),'utf8'));
