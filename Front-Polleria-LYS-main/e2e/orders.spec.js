@@ -70,6 +70,39 @@ for (const type of ['delivery', 'recojo']) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   })
 }
+
+test('un nombre numérico guardado en localStorage bloquea saltarse entrega y confirmar', async ({ page }) => {
+  const { confirmations } = await backend(page);
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('lys-checkout-delivery', JSON.stringify({
+    deliveryType: 'delivery', form: { name: '12345678', phone: '987654321', address: 'Av. Prueba 123' },
+  })));
+  await page.goto('/checkout/resumen');
+  await expect(page.getByText('El nombre no puede contener números.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Confirmar pedido/ })).toBeDisabled();
+  expect(confirmations).toHaveLength(0);
+});
+
+for (const quantity of [-1, 1.5, '2', 101]) {
+  test(`un carrito alterado con cantidad ${JSON.stringify(quantity)} no permite confirmar`, async ({ page }) => {
+    const { confirmations } = await backend(page);
+    await page.goto('/');
+    await page.evaluate(qty => localStorage.setItem('lys-cart', JSON.stringify({ 1: qty })), quantity);
+    await page.goto('/checkout/resumen');
+    await expect(page.getByRole('button', { name: /Confirmar pedido/ })).toBeDisabled();
+    expect(confirmations).toHaveLength(0);
+  });
+}
+
+test('el stock del servidor bloquea un carrito restaurado con cantidades superiores al saldo', async ({ page }) => {
+  const { confirmations } = await backend(page);
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('lys-cart', JSON.stringify({ 1: 51 })));
+  await page.goto('/checkout/resumen');
+  await expect(page.getByText('El carrito supera el stock disponible. Revisa las cantidades.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Confirmar pedido/ })).toBeDisabled();
+  expect(confirmations).toHaveLength(0);
+});
 for (const failure of ['respuesta', 'lectura']) {
   test(`reintenta tras perder la ${failure} y recargar sin duplicar la solicitud`, async ({ page }) => {
     const { confirmations } = await backend(page, { failFirst: failure === 'respuesta', failRead: failure === 'lectura' })

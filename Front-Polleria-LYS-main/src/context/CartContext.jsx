@@ -7,6 +7,9 @@ import orderService from '../services/orderService'
 import { getCurrentUser } from '../services/authService'
 import { orderSignature, readPendingOrder, savePendingOrder, clearPendingOrder } from '../utils/pendingOrder'
 import { formatCodigoPedido } from '../utils/orderNumber'
+import { assertValidForm, asForm } from '../utils/identityValidation'
+import { normalizeDeliveryType } from '../utils/deliveryValidation'
+import { isCartQuantity, isProductId, MAX_CART_LINES, MAX_ITEM_QUANTITY, PAYMENT_METHODS, sanitizeStoredCart, validateCheckout } from '../utils/checkoutValidation'
 
 const CartContext = createContext(null)
 const CART_STORAGE_KEY = 'lys-cart'
@@ -23,7 +26,7 @@ function readStoredCart() {
   if (typeof window === 'undefined') return {}
   try {
     const raw = window.localStorage.getItem(CART_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : {}
+    return raw ? sanitizeStoredCart(JSON.parse(raw)) : {}
   } catch {
     return {}
   }
@@ -35,12 +38,10 @@ function readStoredDelivery() {
     const raw = window.localStorage.getItem(DELIVERY_STORAGE_KEY)
     if (!raw) return { deliveryType: 'delivery', form: EMPTY_FORM }
     const parsed = JSON.parse(raw)
-    const normalizedType = parsed.deliveryType === 'pickup' ? 'recojo' : (parsed.deliveryType || 'delivery')
-    const rawForm = parsed.form || EMPTY_FORM
-    const sanitizedForm = {
-      ...rawForm,
-      name: typeof rawForm.name === 'string' ? rawForm.name.replace(/[0-9]/g, '') : (rawForm.name || '')
-    }
+    const normalizedType = ['delivery', 'recojo'].includes(normalizeDeliveryType(parsed?.deliveryType)) ? normalizeDeliveryType(parsed.deliveryType) : 'delivery'
+    const rawForm = asForm(parsed?.form)
+    const sanitizedForm = Object.fromEntries(Object.keys(EMPTY_FORM).map(key => [key, typeof rawForm[key] === 'string' ? rawForm[key] : '']))
+    if (rawForm.location != null) sanitizedForm.location = rawForm.location
     return { deliveryType: normalizedType, form: sanitizedForm }
   } catch {
     return { deliveryType: 'delivery', form: EMPTY_FORM }
@@ -50,7 +51,8 @@ function readStoredDelivery() {
 function readStoredPayment() {
   if (typeof window === 'undefined') return ''
   try {
-    return window.localStorage.getItem(PAYMENT_STORAGE_KEY) || ''
+    const payment = window.localStorage.getItem(PAYMENT_STORAGE_KEY)
+    return PAYMENT_METHODS.includes(payment) ? payment : ''
   } catch {
     return ''
   }
@@ -75,9 +77,12 @@ export function CartProvider({ children }) {
   const missingCartIds = !cartLoading && cartError ? Object.keys(cart).filter(id => !products[id]) : []
   const [cartOpen, setCartOpen] = useState(false)
   const [deliveryType, setDeliveryTypeRaw] = useState(() => readStoredDelivery().deliveryType)
-  const setDeliveryType = (type) => setDeliveryTypeRaw(type === 'pickup' ? 'recojo' : type)
+  const setDeliveryType = type => {
+    if (['delivery', 'recojo'].includes(normalizeDeliveryType(type))) setDeliveryTypeRaw(normalizeDeliveryType(type))
+  }
   const [form, setForm] = useState(() => readStoredDelivery().form)
-  const [payment, setPayment] = useState(readStoredPayment)
+  const [payment, setPaymentRaw] = useState(readStoredPayment)
+  const setPayment = method => setPaymentRaw(PAYMENT_METHODS.includes(method) ? method : '')
   const [orderNumber, setOrderNumber] = useState(readStoredOrderNumber)
   const [card, setCard] = useState(EMPTY_CARD)
   const [cardReceipt, setCardReceipt] = useState(null)
@@ -176,9 +181,12 @@ export function CartProvider({ children }) {
   }
 
   function addToCart(product, qty = 1) {
-    const id = typeof product === 'object' ? product.id : product
-    const itemProduct = typeof product === 'object' ? product : (products[id] || { id })
-    const maxStock = stockLimit(itemProduct, cart, [...Object.values(products), itemProduct])
+    const id = product && typeof product === 'object' ? product.id : product
+    if (!isProductId(id) || !isCartQuantity(qty)) return false
+    if (!cart[id] && Object.keys(cart).length >= MAX_CART_LINES) return false
+    const itemProduct = product && typeof product === 'object' ? product : (products[id] || { id })
+    const stock = stockLimit(itemProduct, cart, [...Object.values(products), itemProduct])
+    const maxStock = Number.isFinite(stock) ? Math.min(MAX_ITEM_QUANTITY, stock) : 0
     const currentQty = cart[id] || 0
     const targetQty = currentQty + qty
 
@@ -213,7 +221,8 @@ export function CartProvider({ children }) {
   }
 
   function setQty(id, qty) {
-    if (qty <= 0) {
+    if (!isProductId(id) || !Number.isSafeInteger(qty) || qty < 0 || qty > MAX_ITEM_QUANTITY) return
+    if (qty === 0) {
       setCart((current) => {
         const next = { ...current }
         delete next[id]
@@ -224,7 +233,8 @@ export function CartProvider({ children }) {
     }
 
     const itemProduct = products[id] || { id }
-    const maxStock = stockLimit(itemProduct, cart, Object.values(products))
+    const stock = stockLimit(itemProduct, cart, Object.values(products))
+    const maxStock = Number.isFinite(stock) ? Math.min(MAX_ITEM_QUANTITY, stock) : 0
 
     if (qty > maxStock) {
       const productName = itemProduct.name || `Producto #${id}`
@@ -233,7 +243,12 @@ export function CartProvider({ children }) {
         message: `Solo quedan ${maxStock} unidades disponibles de "${productName}". No es posible seleccionar ${qty}.`,
         maxStock,
       })
-      setCart((current) => ({ ...current, [id]: maxStock }))
+      setCart(current => {
+        const next = { ...current }
+        if (maxStock > 0) next[id] = maxStock
+        else delete next[id]
+        return next
+      })
       return
     }
 
@@ -242,8 +257,9 @@ export function CartProvider({ children }) {
   }
 
   function updateFormField(field, value) {
-    const sanitizedValue = field === 'name' && typeof value === 'string' ? value.replace(/[0-9]/g, '') : value
-    setForm((current) => ({ ...current, [field]: sanitizedValue }))
+    if (!Object.hasOwn(EMPTY_FORM, field) && field !== 'location') return
+    if (field !== 'location' && typeof value !== 'string') return
+    setForm(current => ({ ...current, [field]: value }))
   }
 
   function updateCardField(field, value) {
@@ -267,6 +283,7 @@ export function CartProvider({ children }) {
     }
     const user = getCurrentUser();
     if (!user || user.rol !== 'cliente') throw new Error('Debes iniciar sesión como cliente.');
+    assertValidForm(validateCheckout({ items: cartItems, deliveryType, form, payment }, { checkStock: true }));
 
     // Restricción: solo se permite 1 pedido con pago en efectivo o Yape/Plin (contra entrega o recojo en caja)
     // hasta que el pago de dicho pedido anterior sea confirmado. Con tarjeta opera con normalidad.
