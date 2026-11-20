@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { getProductImageUrl } from '../../services/productService';
 
 function getInitialForm(product, categories) {
   if (product) {
@@ -32,6 +33,7 @@ function ProductFormModalContent({
   const [form, setForm] = useState(() => getInitialForm(product, categories));
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const imageUrl = getProductImageUrl(form.image);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
@@ -67,18 +69,9 @@ function ProductFormModalContent({
       return;
     }
 
-    let imageUrl = form.image.trim() || null;
-    if (imageUrl) {
-      try {
-        const parsed = new URL(imageUrl);
-        if (!['http:', 'https:'].includes(parsed.protocol)) {
-          setError('La URL de la imagen debe comenzar con http:// o https://');
-          return;
-        }
-      } catch {
-        setError('Ingresa una URL de imagen válida.');
-        return;
-      }
+    if (form.image.trim() && !imageUrl) {
+      setError('Ingresa una URL de imagen HTTP o HTTPS válida sin credenciales.');
+      return;
     }
 
     const payload = {
@@ -202,10 +195,11 @@ function ProductFormModalContent({
                 value={form.image}
                 onChange={handleChange}
               />
-              {form.image && (
+              {imageUrl && (
                 <div className="admin-img-preview">
                   <img
-                    src={form.image}
+                    src={imageUrl}
+                    referrerPolicy="no-referrer"
                     alt="Vista previa"
                     className="admin-img-preview-thumb"
                     onError={e => {

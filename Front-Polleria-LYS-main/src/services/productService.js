@@ -74,6 +74,17 @@ async function requireAdministrator() {
   // PostgreSQL vuelve a comprobar el rol al ejecutar la escritura.
 }
 
+export function getProductImageUrl(value) {
+  const image = value.trim()
+  if (!/^https?:\/\//i.test(image) || /\p{Cc}/u.test(image)) return null
+  try {
+    const url = new URL(image)
+    return url.username || url.password ? null : image
+  } catch {
+    return null
+  }
+}
+
 function productValues(product) {
   if (typeof product?.name !== 'string' || !product.name.trim()) throw new Error('El nombre es obligatorio.')
   if (typeof product.category !== 'string' || !product.category.trim()) throw new Error('La categoría es obligatoria.')
@@ -84,12 +95,9 @@ function productValues(product) {
   if (typeof available !== 'boolean') throw new Error('La disponibilidad debe ser verdadera o falsa.')
   if (product.desc !== undefined && typeof product.desc !== 'string') throw new Error('La descripción no es válida.')
   if (product.image != null && typeof product.image !== 'string') throw new Error('La imagen debe ser una URL.')
-  const image = product.image?.trim() || null
-  if (image) {
-    let url
-    try { url = new URL(image) } catch { throw new Error('La imagen debe ser una URL válida.') }
-    if (!['https:', 'http:'].includes(url.protocol)) throw new Error('La imagen debe usar una URL HTTP o HTTPS.')
-  }
+  const imageInput = product.image?.trim()
+  const image = imageInput ? getProductImageUrl(imageInput) : null
+  if (imageInput && !image) throw new Error('Ingresa una URL de imagen HTTP o HTTPS válida sin credenciales.')
   return {
     nombre: product.name.trim(), categoria_id: product.category.trim(), precio: product.price,
     descripcion: product.desc?.trim() || '', imagen: image, disponible: available,

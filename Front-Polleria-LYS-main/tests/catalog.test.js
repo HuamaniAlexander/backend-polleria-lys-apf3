@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest'
 const fake = vi.hoisted(() => ({ from: vi.fn(), currentUser: vi.fn() }))
 vi.mock('../src/lib/insforge', () => ({ insforge: { database: { from: fake.from }, auth: { getCurrentUser: fake.currentUser } }, configurationError: '' }))
-import { getCategories, getProducts, getProduct, createProduct, updateProduct, deleteProduct, toggleProductAvailability } from '../src/services/productService'
+import { getCategories, getProducts, getProduct, createProduct, updateProduct, deleteProduct, toggleProductAvailability, getProductImageUrl } from '../src/services/productService'
 
 let requests
 let responses
@@ -125,6 +125,16 @@ test('valida los datos antes de consultar la sesión o realizar una escritura', 
     await expect(createProduct({ ...validProduct, ...patch })).rejects.toThrow()
   }
   expect(fake.currentUser).not.toHaveBeenCalled()
+  expect(requests).toHaveLength(0)
+})
+
+test('valida la URL de imagen para la vista previa y antes de escribir', async () => {
+  expect(getProductImageUrl(validProduct.image)).toBe(validProduct.image)
+  expect(getProductImageUrl('  http://example.com/pollo.png  ')).toBe('http://example.com/pollo.png')
+  for (const image of ['data:image/png;base64,AA', '//example.com/pollo.png', 'https://usuario:clave@example.com/pollo.png']) {
+    expect(getProductImageUrl(image)).toBeNull()
+    await expect(createProduct({ ...validProduct, image })).rejects.toThrow('URL de imagen')
+  }
   expect(requests).toHaveLength(0)
 })
 
