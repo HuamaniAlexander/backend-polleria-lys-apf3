@@ -47,3 +47,34 @@ Resultados de la validación:
 - Publicación nativa comprobada dentro de un bloque con rollback, sin dejar el mensaje de prueba persistido.
 
 Para utilizar estas mejoras en la web publicada, desplegar el frontend de `fix-eventos-nuevo-insforge` con las variables del mismo proyecto.
+
+## Validaciones locales en revisión: 20 de noviembre de 2026
+
+Esta etapa se distribuye en la rama `fix-validaciones-registro-carrito`, creada desde `fix-eventos-nuevo-insforge` (`bee3344`), y conserva el backend **FIX-DB-LYS-NOV**. Los cambios SQL de validación se incluyen como borradores; esta publicación no los ejecuta en el backend compartido. El frontend en `localhost` sigue utilizando el InsForge remoto para las operaciones reales: una cuenta válida que se registre manualmente puede enviar correo y crear datos reales.
+
+Se reutilizan los validadores JavaScript del proyecto, con reglas compartidas para nombres y tipos de datos. No se añade Zod ni una Edge Function. Registro y perfil validan tanto en el formulario como antes de la llamada del servicio. Los datos personales pendientes almacenados en el navegador se vuelven a comprobar antes de guardarlos.
+
+El carrito exige cantidades enteras entre 1 y 100, identificadores válidos y hasta 100 productos distintos. Descarta carritos corruptos guardados en `localStorage`. Antes del pago y de confirmar se revisan disponibilidad, precios finitos, stock compartido, método de pago, entrega y datos de contacto. La confirmación del servicio vuelve a validar el pedido aunque se omitan los pasos del formulario. Los precios enviados por el navegador siguen sin determinar los importes del servidor.
+
+La entrega comprueba nombres sin números, celular, longitudes de dirección/referencia y coordenadas cuando se proporcionan. La cobertura se calcula con las coordenadas; no se confía únicamente en `outOfZone`. La dirección sin punto en el mapa sigue permitida por compatibilidad; exigir un punto obligatorio requiere una decisión adicional y actualizar también los clientes anteriores.
+
+Los siguientes borradores SQL están aislados en `migrations/validacion/`; los ejecutores existentes no los aplican automáticamente:
+
+1. `20261120010000_perfiles-validacion.sql`: revoca permisos generales sobre perfiles, conserva edición de campos personales autorizados y añade un trigger para validar cambios. Mantiene los perfiles provisionales sin apellido/teléfono creados por el alta nativa y no reescribe nombres históricos.
+2. `20261120011000_entrega-validacion.sql`: protege la RPC de pedidos con las reglas de contacto y coordenadas, conservando la implementación original de precios, stock e idempotencia como función interna no accesible al cliente.
+
+Las pruebas SQL utilizan una base PostgreSQL desechable con PGlite y aplican estos borradores solo allí. Reproducen los permisos amplios detectados en el backend importado. Las pruebas de navegador interceptan las APIs y no envían correos ni crean cuentas en InsForge. La posibilidad de bloquear un alta nativa antes de emitir OTP debe verificarse en un backend aislado antes de prometer ese comportamiento: las comprobaciones del frontend no bloquean el acceso directo a la API de Auth.
+
+Para repetir las pruebas desde `Front-Polleria-LYS-main`:
+
+```powershell
+npm test
+npm run test:e2e:validaciones
+npm run build
+```
+
+Para probar la interfaz, seleccionar esta rama, instalar las dependencias del frontend con `npm ci`, configurar su `.env.local` para el mismo proyecto y ejecutar `npm run dev`. La revisión de los demás inputs y formularios queda para una etapa posterior.
+
+Las pruebas de navegador usan el puerto 5185 para conservar el servidor de desarrollo del usuario. El pago con tarjeta y su integración con Stripe quedan expresamente fuera de esta etapa; los hallazgos de la auditoría sobre ese flujo siguen pendientes.
+
+Verificación local completada: 423 pruebas de Vitest, 34 pruebas de navegador y compilación de producción correctas. Se comprobó explícitamente que cambiar el input de nombre a `number` no solicita el alta ni el código de correo. El lint de los archivos modificados no presenta errores; conserva una advertencia anterior de dependencias del efecto en `PagoPage.jsx`.
