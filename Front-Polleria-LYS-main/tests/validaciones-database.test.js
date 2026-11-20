@@ -8,7 +8,7 @@ const client = localUsers.find(user => user.rol === 'cliente')
 const asClient = work => asLocalUser(db, client, work)
 const profile = (values, id = client.id) => asClient(tx => tx.query('UPDATE public.perfiles SET nombre=$1,apellido=$2,telefono=$3 WHERE id=$4 RETURNING nombre,apellido', [...values, id]))
 const order = (delivery, items = [{ id: 1, qty: 1 }], id = randomUUID()) => asClient(tx => tx.query('SELECT public.crear_pedido_cliente($1,$2,$3,$4,$5) AS id', [id, 'delivery', items, delivery, 'efectivo']))
-const valid = { name: 'Cliente Prueba', phone: '987654321', address: 'Av. Prueba 123' }
+const valid = { name: 'Cliente Prueba', phone: '987654321', address: 'Av. Prueba 123', location: { lat: -11.88, lng: -77.03, address: 'Av. Prueba 123' } }
 
 beforeAll(async () => {
   db = await createLocalDatabase(undefined, { inventory: true })
@@ -73,4 +73,19 @@ test('conserva precios de servidor, inventario e idempotencia y no expone la fun
   expect((await order(delivery, undefined, id)).rows[0].id).toBe(id)
   expect((await db.query('SELECT id FROM public.detalles_pedido WHERE pedido_id=$1', [id])).rows).toHaveLength(1)
   await expect(asClient(tx => tx.query('SELECT public.crear_pedido_cliente_validacion_base($1,$2,$3,$4,$5)', [randomUUID(), 'recojo', [{ id: 1, qty: 1 }], valid, 'efectivo']))).rejects.toThrow(/permission denied/)
+})
+
+
+test.each([undefined, null, { lat: '-11.88', lng: '-77.03' }, { lat: -11.94, lng: -77.08, outOfZone: false }])('SQL no acepta delivery sin punto válido en el distrito: %j', async location => {
+  await expect(order({ ...valid, location })).rejects.toThrow()
+})
+
+test('SQL y navegador usan el mismo límite distrital en una cuadrícula de puntos', async () => {
+  const { isWithinCarabayllo } = await import('../src/utils/carabaylloLocation')
+  const points = []
+  for (let lat = -12; lat <= -11.6; lat += 0.04) for (let lng = -77.2; lng <= -76.8; lng += 0.04) points.push({ lat, lng })
+  for (const point of points) {
+    const result = await db.query('SELECT public.punto_en_carabayllo($1,$2) AS inside', [point.lat, point.lng])
+    expect(result.rows[0].inside, JSON.stringify(point)).toBe(isWithinCarabayllo(point))
+  }
 })
