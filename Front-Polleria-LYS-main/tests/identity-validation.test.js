@@ -29,7 +29,7 @@ test.each([null, [], 123, { ...valid, email: 123 }, { ...valid, telefono: 987654
 test('no confía en la bandera de zona ni en tipos falsificados de entrega', () => {
   const form = { name: 'María Pérez', phone: '987654321', address: 'Av. Prueba 123' }
   expect(validateDeliveryForm({ ...form, location: { lat: 0, lng: 0, outOfZone: false } }).location).toBeTruthy()
-  expect(validateDeliveryForm({ ...form, location: { lat: -11.88, lng: -77.03 } }).location).toBeUndefined()
+  expect(validateDeliveryForm({ ...form, location: { lat: -11.88, lng: -77.03, address: form.address } }).location).toBeUndefined()
   expect(validateDeliveryForm({ ...form, location: { lat: '-11.88', lng: '-77.03' } }).location).toBeTruthy()
   expect(validateDeliveryForm({ ...form, address: {} }).address).toBeTruthy()
   expect(validateDeliveryForm({ ...form, reference: 'a'.repeat(501) }).reference).toBeTruthy()

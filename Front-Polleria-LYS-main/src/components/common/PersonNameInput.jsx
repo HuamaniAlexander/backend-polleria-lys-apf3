@@ -3,7 +3,7 @@ const withoutNumbers = value => value.replace(/\p{N}/gu, '')
 
 export default function PersonNameInput({ value = '', onChange, ...props }) {
   function update(event, nextValue) {
-    event.target.value = nextValue
+    event.target.value = nextValue.slice(0, Math.min(props.maxLength ?? 120, 120))
     onChange?.(event)
   }
 

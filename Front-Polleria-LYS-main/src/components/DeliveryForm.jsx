@@ -52,8 +52,7 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
                   value={form.address || ''}
                   onChange={(val) => onFormChange('address', val)}
                   onSelectLocation={(point, fullAddress) => {
-                    onFormChange('location', point)
-                    if (fullAddress) onFormChange('address', fullAddress)
+                    onFormChange('deliveryLocation', { point, address: fullAddress })
                   }}
                   error={errors.address}
                   placeholder="Escribe tu calle o avenida en Carabayllo..."
@@ -67,7 +66,7 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
               <input
                 className={`lys-input ${errors.reference ? 'err' : ''}`}
                 value={form.reference || ''}
-                onChange={(event) => onFormChange('reference', event.target.value)}
+                onChange={(event) => onFormChange('reference', event.target.value.slice(0, 500))}
                 placeholder="Ej. Frente al parque, fachada azul, piso 2..."
                 maxLength={500}
               />
@@ -78,9 +77,9 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
             <DeliveryMap
               point={form.location || null}
               onChange={(loc) => onFormChange('location', loc)}
-              onAddressDetected={(detectedAddr) => {
+              onAddressDetected={(detectedAddr, point) => {
                 if (detectedAddr) {
-                  onFormChange('address', detectedAddr)
+                  onFormChange('deliveryLocation', { point, address: detectedAddr })
                 }
               }}
             />

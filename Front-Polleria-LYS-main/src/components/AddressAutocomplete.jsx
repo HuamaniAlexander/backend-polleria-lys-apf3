@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { MapPin, Search, Loader2, CheckCircle2 } from 'lucide-react'
-import { searchCarabaylloAddresses } from '../utils/carabaylloLocation'
+import { isWithinCarabayllo, searchCarabaylloAddresses } from '../utils/carabaylloLocation'
 
 export default function AddressAutocomplete({
   value = '',
@@ -12,34 +12,31 @@ export default function AddressAutocomplete({
 }) {
   const id = useId()
   const [open, setOpen] = useState(false)
-  const [suggestions, setSuggestions] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState({ query: '', items: [], loading: false })
+  const suggestions = result.query === value ? result.items : []
+  const loading = open && value.trim().length >= 3 && (result.query !== value || result.loading)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const containerRef = useRef(null)
 
   // Búsqueda asistida en tiempo real con debounce
   useEffect(() => {
     if (!open || !value || value.trim().length < 3) {
-      setSuggestions([])
-      setLoading(false)
       return
     }
 
     const controller = new AbortController()
     let cancelled = false
-    setLoading(true)
 
     const timer = setTimeout(async () => {
+      setResult({ query: value, items: [], loading: true })
       try {
         const results = await searchCarabaylloAddresses(value, controller.signal)
         if (!cancelled) {
-          setSuggestions(results)
-          setLoading(false)
+          setResult({ query: value, items: results, loading: false })
         }
       } catch {
         if (!cancelled) {
-          setSuggestions([])
-          setLoading(false)
+          setResult({ query: value, items: [], loading: false })
         }
       }
     }, 450)
@@ -63,15 +60,16 @@ export default function AddressAutocomplete({
   }, [])
 
   function handleSelect(item) {
+    if (!isWithinCarabayllo(item.point)) return
     setOpen(false)
-    setSuggestions([])
+    setResult({ query: '', items: [], loading: false })
     setHighlightedIndex(-1)
 
     const formattedAddress = item.title.toLowerCase().includes('carabayllo')
       ? item.title
       : `${item.title}, Carabayllo`
 
-    onChange(formattedAddress)
+    if (formattedAddress.length > 250) return
     if (onSelectLocation && item.point) {
       onSelectLocation(item.point, formattedAddress)
     }
@@ -104,7 +102,7 @@ export default function AddressAutocomplete({
           className={`lys-input ${error ? 'err' : ''}`}
           value={value}
           onChange={(e) => {
-            onChange(e.target.value)
+            onChange(e.target.value.slice(0, 250))
             setOpen(true)
             setHighlightedIndex(-1)
           }}
@@ -115,7 +113,7 @@ export default function AddressAutocomplete({
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          maxLength={120}
+          maxLength={250}
           disabled={disabled}
           autoComplete="off"
           role="combobox"
@@ -173,7 +171,7 @@ export default function AddressAutocomplete({
 
           {suggestions.length === 0 && !loading && (
             <div className="address-dropdown-empty">
-              No se encontraron coincidencias exactas. Puedes ingresar tu dirección manualmente.
+              No se encontraron coincidencias exactas. Selecciona tu dirección en el mapa.
             </div>
           )}
         </div>

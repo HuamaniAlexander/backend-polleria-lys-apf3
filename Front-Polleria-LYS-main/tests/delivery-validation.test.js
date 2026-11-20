@@ -58,3 +58,25 @@ describe('Validaciones del formulario de entrega y checkout', () => {
     expect(resPickup.location).toBeUndefined()
   })
 })
+
+
+test('exige ubicación vinculada al texto y vuelve a invalidarla al editar la dirección', async () => {
+  const { updateDeliveryField } = await import('../src/utils/deliveryValidation')
+  const form = { name: 'Cliente Prueba', phone: '987654321', address: 'Av. Prueba 123', reference: '' }
+  expect(validateDeliveryForm(form).location).toBeTruthy()
+  const selected = updateDeliveryField(form, 'deliveryLocation', { point: { lat: -11.88, lng: -77.03 }, address: form.address })
+  expect(validateDeliveryForm(selected)).toEqual({})
+  const edited = updateDeliveryField(selected, 'address', 'Otra calle 123')
+  expect(edited.location).toBeNull()
+  expect(validateDeliveryForm(edited).location).toBeTruthy()
+  expect(validateDeliveryForm({ ...selected, address: 'Otra calle 123' }).location).toBeTruthy()
+})
+
+test('limita los valores en el estado y rechaza datos sobredimensionados recibidos directamente', async () => {
+  const { DELIVERY_LIMITS, updateDeliveryField } = await import('../src/utils/deliveryValidation')
+  for (const [field, limit] of Object.entries(DELIVERY_LIMITS)) {
+    expect(updateDeliveryField({}, field, 'a'.repeat(limit + 50))[field]).toHaveLength(limit)
+    expect(validateDeliveryForm({ name: 'Cliente Prueba', phone: '987654321', [field]: 'a'.repeat(limit + 1) })[field]).toBeTruthy()
+  }
+  expect(updateDeliveryField({}, 'rol', 'admin')).toEqual({})
+})

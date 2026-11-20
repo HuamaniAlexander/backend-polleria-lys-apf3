@@ -7,7 +7,7 @@ let calls, responses
 const saved = { id: '10000000-0000-0000-0000-000000000099', tipo: 'delivery', estado: 'pendiente',
   subtotal: '80.00', envio: '6.00', total: '86.00', destinatario: { name: 'Cliente' },
   detalles_pedido: [{ producto_id: 1, nombre_producto: 'Nombre vendido', precio_unitario: '40.00', cantidad: 2 }] }
-const delivery = { name: 'Cliente Prueba', phone: '987654321', address: 'Av. Prueba 123', reference: '' }
+const delivery = { name: 'Cliente Prueba', phone: '987654321', address: 'Av. Prueba 123', location: { lat: -11.88, lng: -77.03, address: 'Av. Prueba 123' }, reference: '' }
 beforeEach(() => {
   calls = []; responses = []
   fake.user.mockReturnValue({ id: 'cliente-a', rol: 'cliente' })
@@ -60,7 +60,7 @@ test('mantiene el contrato RPC y consulta el pedido guardado antes de confirmar'
   const result = await orders.createOrder({ id: saved.id, items: [{ product: { id: 1, price: 0, name: 'Falso' }, qty: 2 }],
     deliveryType: 'delivery', form: delivery, payment: 'efectivo', total: 0, cliente_id: 'ajeno' })
   expect(fake.rpc).toHaveBeenCalledWith('crear_pedido_cliente', { solicitud_id: saved.id, tipo_entrega: 'delivery',
-    articulos: [{ id: 1, qty: 2 }], datos_entrega: delivery, metodo: 'efectivo' })
+    articulos: [{ id: 1, qty: 2 }], datos_entrega: { ...delivery, location: { lat: -11.88, lng: -77.03 } }, metodo: 'efectivo' })
   expect(result.total).toBe(86)
 })
 test('registra una tarjeta aprobada junto con el pedido', async () => {
@@ -69,7 +69,7 @@ test('registra una tarjeta aprobada junto con el pedido', async () => {
     deliveryType: 'delivery', form: delivery, payment: 'tarjeta',
     cardReceipt: { success: true, status: 'succeeded', paymentIntentId: 'pi_prueba_123' } })
   expect(fake.rpc).toHaveBeenCalledWith('crear_pedido_cliente_tarjeta', {
-    solicitud_id: saved.id, tipo_entrega: 'delivery', articulos: [{ id: 1, qty: 2 }], datos_entrega: delivery,
+    solicitud_id: saved.id, tipo_entrega: 'delivery', articulos: [{ id: 1, qty: 2 }], datos_entrega: { ...delivery, location: { lat: -11.88, lng: -77.03 } },
     referencia_pago: 'pi_prueba_123', idempotencia_pago: saved.id,
   })
 })

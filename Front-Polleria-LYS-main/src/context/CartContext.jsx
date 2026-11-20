@@ -8,7 +8,7 @@ import { getCurrentUser } from '../services/authService'
 import { orderSignature, readPendingOrder, savePendingOrder, clearPendingOrder } from '../utils/pendingOrder'
 import { formatCodigoPedido } from '../utils/orderNumber'
 import { assertValidForm, asForm } from '../utils/identityValidation'
-import { normalizeDeliveryType } from '../utils/deliveryValidation'
+import { normalizeDeliveryType, updateDeliveryField } from '../utils/deliveryValidation'
 import { isCartQuantity, isProductId, MAX_CART_LINES, MAX_ITEM_QUANTITY, PAYMENT_METHODS, sanitizeStoredCart, validateCheckout } from '../utils/checkoutValidation'
 
 const CartContext = createContext(null)
@@ -257,9 +257,7 @@ export function CartProvider({ children }) {
   }
 
   function updateFormField(field, value) {
-    if (!Object.hasOwn(EMPTY_FORM, field) && field !== 'location') return
-    if (field !== 'location' && typeof value !== 'string') return
-    setForm(current => ({ ...current, [field]: value }))
+    setForm(current => updateDeliveryField(current, field, value))
   }
 
   function updateCardField(field, value) {

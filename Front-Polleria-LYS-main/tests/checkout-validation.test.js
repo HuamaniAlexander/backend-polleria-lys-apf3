@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import { getCartError, sanitizeStoredCart, validateCheckout } from '../src/utils/checkoutValidation'
 const product = { id: 1, price: 20, stock: 5, available: true }
-const valid = { items: [{ product, qty: 1 }], deliveryType: 'delivery', payment: 'efectivo', form: { name: 'Cliente Prueba', phone: '987654321', address: 'Av. Prueba 123' } }
+const valid = { items: [{ product, qty: 1 }], deliveryType: 'delivery', payment: 'efectivo', form: { name: 'Cliente Prueba', phone: '987654321', address: 'Av. Prueba 123', location: { lat: -11.88, lng: -77.03, address: 'Av. Prueba 123' } } }
 
 test.each([-1, 0, 1.5, 101, '2', null, NaN, Infinity, {}])('rechaza la cantidad %j antes de confirmar', qty => {
   expect(getCartError([{ product, qty }])).toBeTruthy()
