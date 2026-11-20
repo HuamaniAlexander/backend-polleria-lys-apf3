@@ -58,3 +58,14 @@ describe('Validaciones del formulario de entrega y checkout', () => {
     expect(resPickup.location).toBeUndefined()
   })
 })
+
+test('valida datos de entrega cargados fuera de los controles del formulario', () => {
+  const form = { name: 'María Torres', phone: '987654321', address: 'Av. Larco 123' }
+  expect(validateDeliveryForm({ ...form, name: 'A'.repeat(51) }).name).toBeDefined()
+  expect(validateDeliveryForm({ ...form, address: 'A'.repeat(251) }).address).toBeDefined()
+  expect(validateDeliveryForm({ ...form, reference: 'A'.repeat(81) }).reference).toBeDefined()
+  expect(validateDeliveryForm({ ...form, address: 'Av. Larco\n123' }).address).toBeDefined()
+  expect(validateDeliveryForm({ ...form, phone: 987654321 }).phone).toBeDefined()
+  expect(validateDeliveryForm({ ...form, address: 'A'.repeat(250), reference: 'A'.repeat(80) })).toEqual({})
+  expect(validateDeliveryForm({ ...form, reference: 12 }, 'recojo')).toEqual({})
+})
