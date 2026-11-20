@@ -59,7 +59,7 @@ test('el alta que inserta el perfil rechaza nombres numéricos y revierte el usu
   expect((await db.query('SELECT id FROM auth.users WHERE id=$1', [id])).rows).toEqual([])
 })
 
-test.each([{ name: 'Cliente123' }, { phone: 987654321 }, { address: {} }, { reference: 'x'.repeat(501) }, { location: { lat: 0, lng: 0, outOfZone: false } }])('la RPC bloquea los datos de entrega manipulados: %j', async changes => {
+test.each([{ name: 'Cliente123' }, { phone: 987654321 }, { address: {} }, { reference: 'x'.repeat(151) }, { location: { lat: 0, lng: 0, outOfZone: false } }])('la RPC bloquea los datos de entrega manipulados: %j', async changes => {
   const id = randomUUID()
   await expect(order({ ...valid, ...changes }, undefined, id)).rejects.toThrow()
   expect((await db.query('SELECT id FROM public.pedidos WHERE id=$1', [id])).rows).toEqual([])
@@ -73,6 +73,12 @@ test('conserva precios de servidor, inventario e idempotencia y no expone la fun
   expect((await order(delivery, undefined, id)).rows[0].id).toBe(id)
   expect((await db.query('SELECT id FROM public.detalles_pedido WHERE pedido_id=$1', [id])).rows).toHaveLength(1)
   await expect(asClient(tx => tx.query('SELECT public.crear_pedido_cliente_validacion_base($1,$2,$3,$4,$5)', [randomUUID(), 'recojo', [{ id: 1, qty: 1 }], valid, 'efectivo']))).rejects.toThrow(/permission denied/)
+})
+
+test('la RPC acepta una referencia de exactamente 150 caracteres', async () => {
+  const id = randomUUID(), reference = 'r'.repeat(150)
+  await order({ ...valid, reference }, undefined, id)
+  expect((await db.query('SELECT destinatario FROM public.pedidos WHERE id=$1', [id])).rows[0].destinatario.reference).toBe(reference)
 })
 
 

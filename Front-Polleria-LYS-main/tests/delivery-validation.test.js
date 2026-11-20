@@ -2,6 +2,14 @@ import { describe, expect, test } from 'vitest'
 import { validateDeliveryForm } from '../src/utils/deliveryValidation'
 
 describe('Validaciones del formulario de entrega y checkout', () => {
+  test('la referencia es opcional y admite hasta 150 caracteres', () => {
+    const form = { name: 'Cliente Prueba', phone: '987654321' }
+    for (const reference of [undefined, '', 'r'.repeat(150)]) {
+      expect(validateDeliveryForm({ ...form, reference }, 'recojo')).toEqual({})
+    }
+    expect(validateDeliveryForm({ ...form, reference: 'r'.repeat(151) }, 'recojo').reference)
+      .toBe('La referencia debe ser texto de hasta 150 caracteres.')
+  })
   test('rechaza nombres vacíos o menores o iguales a 6 letras pidiendo nombre completo', () => {
     // Vacío
     const resEmpty = validateDeliveryForm({ name: '', phone: '987654321', address: 'Av. Túpac Amaru 1234' })

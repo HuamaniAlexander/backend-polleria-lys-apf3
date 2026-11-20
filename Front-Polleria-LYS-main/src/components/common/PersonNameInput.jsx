@@ -1,3 +1,5 @@
+import FixedLengthInput from './FixedLengthInput'
+
 const hasNumbers = value => /\p{N}/u.test(value)
 const withoutNumbers = value => value.replace(/\p{N}/gu, '')
 
@@ -19,8 +21,9 @@ export default function PersonNameInput({ value = '', onChange, ...props }) {
   }
 
   return (
-    <input
+    <FixedLengthInput
       {...props}
+      maxLength={Math.min(props.maxLength ?? 120, 120)}
       value={value}
       onKeyDown={event => {
         if (!event.ctrlKey && !event.metaKey && !event.altKey && /^\p{N}$/u.test(event.key)) event.preventDefault()

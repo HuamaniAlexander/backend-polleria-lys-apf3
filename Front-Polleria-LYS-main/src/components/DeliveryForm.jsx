@@ -2,10 +2,12 @@ import { MapPin, Store } from 'lucide-react'
 import AddressAutocomplete from './AddressAutocomplete'
 import DeliveryMap from './DeliveryMap'
 import PersonNameInput from './common/PersonNameInput'
+import FixedLengthInput from './common/FixedLengthInput'
+import { DELIVERY_LIMITS } from '../utils/deliveryValidation'
 
 export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeChange, onFormChange, onContinue }) {
   function handlePhoneChange(event) {
-    const digitsOnly = event.target.value.replace(/\D/g, '').slice(0, 9)
+    const digitsOnly = event.target.value.replace(/\D/g, '').slice(0, DELIVERY_LIMITS.phone)
     if (digitsOnly && digitsOnly[0] !== '9') return
     onFormChange('phone', digitsOnly)
   }
@@ -38,7 +40,7 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
             value={form.name || ''}
             onChange={event => onFormChange('name', event.target.value)}
             placeholder="Ej. María Torres López"
-            maxLength={120}
+            maxLength={DELIVERY_LIMITS.name}
           />
           {errors.name && <span className="checkout-field-error">{errors.name}</span>}
         </label>
@@ -63,12 +65,12 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
 
             <label className="checkout-field-label">
               Referencia (opcional)
-              <input
+              <FixedLengthInput
                 className={`lys-input ${errors.reference ? 'err' : ''}`}
                 value={form.reference || ''}
-                onChange={(event) => onFormChange('reference', event.target.value.slice(0, 500))}
+                onChange={(event) => onFormChange('reference', event.target.value.slice(0, DELIVERY_LIMITS.reference))}
                 placeholder="Ej. Frente al parque, fachada azul, piso 2..."
-                maxLength={500}
+                maxLength={DELIVERY_LIMITS.reference}
               />
               {errors.reference && <span className="checkout-field-error">{errors.reference}</span>}
             </label>
@@ -89,13 +91,13 @@ export default function DeliveryForm({ deliveryType, form, errors = {}, onTypeCh
 
         <label className="checkout-field-label">
           Teléfono de contacto
-          <input
+          <FixedLengthInput
             className={`lys-input ${errors.phone ? 'err' : ''}`}
             value={form.phone || ''}
             onChange={handlePhoneChange}
             type="tel"
             inputMode="numeric"
-            maxLength={9}
+            maxLength={DELIVERY_LIMITS.phone}
             placeholder="9XXXXXXXX"
           />
           {errors.phone && <span className="checkout-field-error">{errors.phone}</span>}

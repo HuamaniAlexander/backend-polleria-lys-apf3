@@ -234,12 +234,21 @@ test('entrega respeta límites aunque se manipule maxlength y se pegue texto', a
   await page.goto('/checkout/entrega')
   const fields = [
     [page.getByPlaceholder('Ej. María Torres López'), 120, 'a'],
-    [page.getByPlaceholder('Ej. Frente al parque, fachada azul, piso 2...'), 500, 'r'],
+    [page.getByPlaceholder('Ej. Frente al parque, fachada azul, piso 2...'), 150, 'r'],
     [page.getByRole('combobox'), 250, 'c'],
     [page.getByPlaceholder('9XXXXXXXX'), 9, '9'],
   ]
   for (const [input, limit, character] of fields) {
+    // Un límite reducido no debe bloquear la escritura antes del onChange.
+    await input.evaluate(element => element.setAttribute('maxlength', '2'))
+    await expect(input).toHaveAttribute('maxlength', String(limit))
+    await input.fill('')
+    await input.pressSequentially(character.repeat(5))
+    await expect(input).toHaveValue(character.repeat(5))
+    await input.evaluate(element => element.setAttribute('maxlength', '9999'))
+    await expect(input).toHaveAttribute('maxlength', String(limit))
     await input.evaluate(element => element.removeAttribute('maxlength'))
+    await expect(input).toHaveAttribute('maxlength', String(limit))
     await input.fill(character.repeat(limit + 60))
     await expect(input).toHaveValue(character.repeat(limit))
     await input.press('End')
@@ -254,6 +263,27 @@ test('entrega respeta límites aunque se manipule maxlength y se pegue texto', a
     element.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }))
   })
   await expect(name).toHaveValue('a'.repeat(120))
+})
+
+test('tarjeta restaura los límites del inspector y conserva el formato al escribir', async ({ page }) => {
+  await backend(page)
+  await page.goto('/checkout/pago')
+  await page.getByRole('button', { name: /Tarjeta Débito/ }).click()
+  for (const [placeholder, limit, value] of [
+    ['Número de tarjeta', 19, '4111 1111 1111 1111'],
+    ['Fecha de caducidad', 5, '12/30'],
+    ['Código de seguridad', 3, '123'],
+  ]) {
+    const input = page.getByPlaceholder(placeholder)
+    await input.evaluate(element => element.setAttribute('maxlength', '2'))
+    await expect(input).toHaveAttribute('maxlength', String(limit))
+    await input.pressSequentially(value)
+    await expect(input).toHaveValue(value)
+    await input.evaluate(element => element.removeAttribute('maxlength'))
+    await expect(input).toHaveAttribute('maxlength', String(limit))
+    await input.fill(value + '999999')
+    await expect(input).toHaveValue(value)
+  }
 })
 
 test('escribir una dirección distinta invalida el punto y bloquea continuar y confirmar', async ({ page }) => {

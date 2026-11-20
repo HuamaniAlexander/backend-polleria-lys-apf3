@@ -27,8 +27,8 @@ BEGIN
     RAISE EXCEPTION 'Revisa el nombre completo y teléfono de entrega' USING ERRCODE = '22023';
   END IF;
   IF datos_entrega ? 'reference' AND
-     (jsonb_typeof(datos_entrega->'reference') IS DISTINCT FROM 'string' OR char_length(datos_entrega->>'reference') > 500 OR (datos_entrega->>'reference') ~ '[[:cntrl:]]') THEN
-    RAISE EXCEPTION 'La referencia debe ser texto de hasta 500 caracteres' USING ERRCODE = '22023';
+     (jsonb_typeof(datos_entrega->'reference') IS DISTINCT FROM 'string' OR char_length(datos_entrega->>'reference') > 150 OR (datos_entrega->>'reference') ~ '[[:cntrl:]]') THEN
+    RAISE EXCEPTION 'La referencia debe ser texto de hasta 150 caracteres' USING ERRCODE = '22023';
   END IF;
   IF tipo_entrega = 'delivery' THEN
     IF jsonb_typeof(datos_entrega->'address') IS DISTINCT FROM 'string' OR

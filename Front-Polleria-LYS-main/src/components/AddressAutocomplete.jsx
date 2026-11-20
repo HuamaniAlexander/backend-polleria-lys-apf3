@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { MapPin, Search, Loader2, CheckCircle2 } from 'lucide-react'
 import { isWithinCarabayllo, searchCarabaylloAddresses } from '../utils/carabaylloLocation'
+import FixedLengthInput from './common/FixedLengthInput'
+import { DELIVERY_LIMITS } from '../utils/deliveryValidation'
 
 export default function AddressAutocomplete({
   value = '',
@@ -69,7 +71,7 @@ export default function AddressAutocomplete({
       ? item.title
       : `${item.title}, Carabayllo`
 
-    if (formattedAddress.length > 250) return
+    if (formattedAddress.length > DELIVERY_LIMITS.address) return
     if (onSelectLocation && item.point) {
       onSelectLocation(item.point, formattedAddress)
     }
@@ -97,12 +99,12 @@ export default function AddressAutocomplete({
   return (
     <div className="address-autocomplete-container" ref={containerRef}>
       <div className="address-autocomplete-input-wrap">
-        <input
+        <FixedLengthInput
           id={id}
           className={`lys-input ${error ? 'err' : ''}`}
           value={value}
           onChange={(e) => {
-            onChange(e.target.value.slice(0, 250))
+            onChange(e.target.value.slice(0, DELIVERY_LIMITS.address))
             setOpen(true)
             setHighlightedIndex(-1)
           }}
@@ -113,7 +115,7 @@ export default function AddressAutocomplete({
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          maxLength={250}
+          maxLength={DELIVERY_LIMITS.address}
           disabled={disabled}
           autoComplete="off"
           role="combobox"

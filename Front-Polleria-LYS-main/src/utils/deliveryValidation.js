@@ -4,7 +4,7 @@
 import { asForm, getPersonNameError, normalizePersonName } from './identityValidation'
 import { isWithinCarabayllo } from './carabaylloLocation'
 
-export const DELIVERY_LIMITS = Object.freeze({ name: 120, address: 250, reference: 500, phone: 9 })
+export const DELIVERY_LIMITS = Object.freeze({ name: 120, address: 250, reference: 150, phone: 9 })
 
 // Los límites pertenecen al estado, no a los atributos editables del DOM.
 export function updateDeliveryField(form, field, value) {
@@ -50,8 +50,8 @@ export function validateDeliveryForm(form = {}, deliveryType = 'delivery') {
   }
 
   if (!['delivery', 'recojo'].includes(normalizeDeliveryType(deliveryType))) nextErrors.deliveryType = 'Selecciona delivery o recojo en tienda.'
-  if (form.reference !== undefined && (typeof form.reference !== 'string' || form.reference.length > 500 || /[\p{Cc}\p{Cf}]/u.test(form.reference))) {
-    nextErrors.reference = 'La referencia debe ser texto de hasta 500 caracteres.'
+  if (form.reference !== undefined && (typeof form.reference !== 'string' || form.reference.length > DELIVERY_LIMITS.reference || /[\p{Cc}\p{Cf}]/u.test(form.reference))) {
+    nextErrors.reference = `La referencia debe ser texto de hasta ${DELIVERY_LIMITS.reference} caracteres.`
   }
   if (deliveryType === 'delivery') {
     const trimmedAddress = typeof form.address === 'string' ? form.address.trim() : ''
