@@ -21,6 +21,18 @@ Utiliza las siguientes cuentas para probar cada uno de los roles y permisos del 
 
 ---
 
+## Tarjeta de prueba para Stripe Checkout
+
+En el modo de prueba de Stripe, elige **Tarjeta** en el checkout e ingresa estos datos para simular un pago.
+
+- **Visa:** `4242 4242 4242 4242`
+- **Vencimiento:** `12/34` o cualquier fecha futura
+- **CVC:** `123` o cualquier código de tres dígitos
+- **Titular:** `Cliente de Prueba`
+
+[Documentación oficial de tarjetas de prueba de Stripe](https://docs.stripe.com/testing#cards)
+
+---
 ##  Instrucciones para Ejecutar el Proyecto
 
 ### 1. Variables de Entorno
